@@ -7,6 +7,94 @@
 let dragTareaId = null;
 let dragColOrigenId = null;
 let placeholder = null;
+let _estructuraTableroProyecto = null;
+let _subtareasEtapaKanban = [];
+
+function _escTablero(valor = "") {
+  return String(valor)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function _contextoSubtareaEtapaKanban(subtarea) {
+  const { fase, etapa } = resolverContextoEstructura(
+    _estructuraTableroProyecto,
+    subtarea.faseId,
+    subtarea.etapaId,
+  );
+  const faseNombre = subtarea.faseNombre || fase?.nombre || "";
+  const etapaNombre = subtarea.etapaNombre || etapa?.nombre || "";
+  return { faseNombre, etapaNombre };
+}
+
+function _tarjetaSubtareaEtapaKanban(subtarea) {
+  const { faseNombre, etapaNombre } = _contextoSubtareaEtapaKanban(subtarea);
+  const estado = subtarea.completada
+    ? '<span class="badge bg">Completada</span>'
+    : '<span class="badge ba">Pendiente</span>';
+  const resps = (subtarea.responsables || [])
+    .slice(0, 3)
+    .map((id) => {
+      const miembro = miembrosActuales.find((m) => m.id === id);
+      return `<div class="avatar avatar-sm" title="${_escTablero(miembro?.nombre || id)}">${inic(miembro?.nombre || "?")}</div>`;
+    })
+    .join("");
+
+  return `<div class="k-card">
+    <div class="k-card-tags">
+      <span class="badge bm">subtarea etapa</span>
+      ${faseNombre ? `<span class="badge ba">${_escTablero(faseNombre)}</span>` : ""}
+      ${etapaNombre ? `<span class="badge bi">${_escTablero(etapaNombre)}</span>` : ""}
+      ${estado}
+    </div>
+    <div class="k-card-title">${_escTablero(subtarea.titulo || "Subtarea")}</div>
+    <div class="k-card-meta">
+      <span class="k-card-id">#${String(subtarea.id || "").slice(-6)}</span>
+      <div class="flex" style="gap:4px">
+        <div class="avatar-group">${resps || '<span class="txt3">—</span>'}</div>
+        <button class="btn btn-outline btn-xs" onclick="toggleSubtareaEtapaKanban('${subtarea.id}')">
+          ${subtarea.completada ? "Reabrir" : "Completar"}
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function _columnaSubtareasEtapaKanban() {
+  const subtareas = Array.isArray(_subtareasEtapaKanban)
+    ? _subtareasEtapaKanban
+    : [];
+  const contenido = subtareas.length
+    ? subtareas.map((sub) => _tarjetaSubtareaEtapaKanban(sub)).join("")
+    : '<div class="vacío" style="padding:14px">Sin subtareas de etapa</div>';
+  return `
+    <div class="k-col" id="col-etapas-static">
+      <div class="k-col-head">
+        <div class="k-col-title">
+          <div class="k-col-dot" style="background:var(--a2)"></div>
+          Subtareas de etapa
+        </div>
+        <span class="k-col-cnt">${subtareas.length}</span>
+      </div>
+      <div class="k-wip">Sin columna Kanban</div>
+      <div class="k-cards">
+        ${contenido}
+      </div>
+    </div>`;
+}
+
+async function toggleSubtareaEtapaKanban(subtareaId) {
+  try {
+    await api("POST", `/subtareas/${subtareaId}/toggle`);
+    await cargarTablero(proyActualId);
+    toast("Subtarea actualizada");
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
 
 /* ── SELECTORES ── */
 async function cargarSelectores() {
@@ -54,10 +142,19 @@ async function cargarTablero(proyId) {
   board.innerHTML =
     '<div class="vacío" style="width:100%"><span class="spinner"></span> Cargando...</div>';
   try {
-    const [tableros, miembros] = await Promise.all([
+    const [tableros, miembros, estructura, subtareasEtapa] = await Promise.all([
       api("GET", `/proyectos/${proyId}/tableros`),
       api("GET", `/proyectos/${proyId}/miembros`).catch(() => []),
+      cargarEstructuraProyecto(proyId).catch(() => ({
+        fases: [],
+        fasesPorId: {},
+        etapasPorFase: {},
+        etapasPorId: {},
+      })),
+      api("GET", `/proyectos/${proyId}/subtareas-etapa`).catch(() => []),
     ]);
+    _estructuraTableroProyecto = estructura;
+    _subtareasEtapaKanban = Array.isArray(subtareasEtapa) ? subtareasEtapa : [];
     miembrosActuales = miembros;
     if (!tableros.length) {
       board.innerHTML =
@@ -75,10 +172,9 @@ async function cargarTablero(proyId) {
       }),
     );
 
-    board.innerHTML =
-      cols
-        .map(
-          (c) => `
+    const columnasKanban = cols
+      .map(
+        (c) => `
       <div class="k-col" id="col-${c.id}" data-col-id="${c.id}">
         <div class="k-col-head">
           <div class="k-col-title">
@@ -97,8 +193,11 @@ async function cargarTablero(proyId) {
         </div>
         <div class="k-add" onclick="abrirModalTareaCol('${c.id}')"><i class='ph ph-plus'></i> Agregar tarea</div>
       </div>`,
-        )
-        .join("") +
+      )
+      .join("");
+    board.innerHTML =
+      _columnaSubtareasEtapaKanban() +
+      columnasKanban +
       `<div class="k-col-nueva" onclick="agregarColumna()">
         <span class="k-col-nueva-icon"><i class='ph ph-plus-circle'></i></span>
         <span>Nueva columna</span>
@@ -130,11 +229,19 @@ function tarjeta(t) {
     .join("");
 
   const nSubtareas = (t.subtareas || []).length;
+  const { fase, etapa } = resolverContextoEstructura(
+    _estructuraTableroProyecto,
+    t.faseId,
+    t.etapaId,
+  );
 
   return `<div class="k-card" draggable="true" data-tarea-id="${t.id}" data-col-id="${t.columnaId}">
     <div class="k-card-tags">
       <div class="prio ${colPrio(t.prioridad)}"></div>
       ${badgeTipo(t.tipo)}
+      ${fase ? `<span class="badge ba" title="Fase">${_escTablero(fase.nombre)}</span>` : ""}
+      ${etapa ? `<span class="badge bi" title="Etapa">${_escTablero(etapa.nombre)}</span>` : ""}
+      ${!fase && !etapa ? '<span class="badge bm" title="Tarea legada sin estructura">Sin fase/etapa</span>' : ""}
       ${t.estaVencida ? '<span class="badge br">Vencida</span>' : ""}
       ${nSubtareas > 0 ? `<span class="badge bm" title="Subtareas"><i class="ph ph-tree-structure" style="font-size:9px"></i> ${nSubtareas}</span>` : ""}
     </div>
@@ -144,11 +251,14 @@ function tarjeta(t) {
       <div class="flex" style="gap:4px">
         <div class="avatar-group">${resps}</div>
         <button class="btn btn-ghost btn-xs" onclick="abrirPanelSubtareas('${t.id}','${t.titulo.replace(/'/g, "\\'")}')"
-          title="Subtareas (Builder)" style="color:var(--a2)">
+          title="Subtareas y jerarquía (Builder + Composite)" style="color:var(--a2)">
           <i class="ph ph-tree-structure"></i>
         </button>
         <button class="btn btn-ghost btn-xs" onclick="abrirPanelComentarios('${t.id}','${t.titulo.replace(/'/g, "\\'")}')">
           <i class="ph ph-chat-circle-text"></i>
+        </button>
+        <button class="btn btn-ghost btn-xs" onclick="abrirEditarTarea('${t.id}')" title="Editar">
+          <i class="ph ph-pencil-simple"></i>
         </button>
         <button class="btn btn-ghost btn-xs" onclick="abrirAsignar('${t.id}')" title="Asignar"><i class="ph ph-user-plus"></i></button>
         <button class="btn btn-ghost btn-xs" onclick="clonarTarea('${t.id}')" title="Clonar"><i class="ph ph-copy"></i></button>
@@ -160,7 +270,7 @@ function tarjeta(t) {
 
 /* ── DRAG & DROP ── */
 function iniciarDragDrop() {
-  document.querySelectorAll(".k-cards").forEach((zona) => {
+  document.querySelectorAll(".k-cards[data-col-id]").forEach((zona) => {
     zona.addEventListener("dragover", onDragOver);
     zona.addEventListener("dragenter", onDragEnter);
     zona.addEventListener("dragleave", onDragLeave);

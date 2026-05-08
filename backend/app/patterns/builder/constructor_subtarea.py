@@ -11,6 +11,7 @@ Uso:
         ConstructorSubtarea()
         .con_titulo("Revisar diseño de login")
         .en_tarea("tarea-uuid-123")
+        # o .en_etapa("etapa-uuid-123")
         .en_proyecto("proyecto-uuid-456")
         .creada_por("usuario-uuid-789")
         .con_responsables(["dev-uuid-1"])
@@ -20,7 +21,6 @@ Uso:
 """
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
 
 
 class ConstructorSubtarea:
@@ -39,6 +39,7 @@ class ConstructorSubtarea:
             "descripcion":      None,
             "completada":       False,
             "tareaId":          "",
+            "etapaId":          "",
             "proyectoId":       "",
             "creadoPor":        "",
             "responsables":     [],
@@ -59,6 +60,12 @@ class ConstructorSubtarea:
 
     def en_tarea(self, tarea_id: str) -> "ConstructorSubtarea":
         self._datos["tareaId"] = tarea_id
+        self._datos["etapaId"] = ""
+        return self
+
+    def en_etapa(self, etapa_id: str) -> "ConstructorSubtarea":
+        self._datos["etapaId"] = etapa_id
+        self._datos["tareaId"] = ""
         return self
 
     def en_proyecto(self, proyecto_id: str) -> "ConstructorSubtarea":
@@ -91,8 +98,8 @@ class ConstructorSubtarea:
         """
         if not self._datos["titulo"] or len(self._datos["titulo"]) < 2:
             raise ValueError("El título de la subtarea debe tener al menos 2 caracteres")
-        if not self._datos["tareaId"]:
-            raise ValueError("La subtarea debe pertenecer a una tarea padre (tareaId)")
+        if not self._datos["tareaId"] and not self._datos["etapaId"]:
+            raise ValueError("La subtarea debe pertenecer a una tarea padre o una etapa")
         if not self._datos["proyectoId"]:
             raise ValueError("La subtarea debe pertenecer a un proyecto (proyectoId)")
 

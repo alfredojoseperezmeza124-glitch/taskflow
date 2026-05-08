@@ -44,7 +44,7 @@ function _htmlPanelSubtareas() {
 <div class="subtarea-drawer">
   <div class="subtarea-header">
     <div>
-      <div class="subtarea-label"><i class="ph ph-tree-structure"></i> Subtareas · Builder</div>
+      <div class="subtarea-label"><i class="ph ph-tree-structure"></i> Subtareas y jerarquía · Builder + Composite</div>
       <div class="subtarea-title" id="stTareaTitle">—</div>
     </div>
     <button class="btn btn-ghost btn-xs" onclick="cerrarPanelSubtareas()" style="font-size:18px">✕</button>
@@ -56,6 +56,18 @@ function _htmlPanelSubtareas() {
       <span id="stProgPct" style="font-family:var(--mono);font-size:11px;color:var(--green)">0%</span>
     </div>
     <div class="prog"><div class="prog-bar" id="stProgBar" style="width:0%;background:var(--green)"></div></div>
+  </div>
+
+  <div
+    id="stCompositeWrap"
+    style="display:none;margin:10px 0 12px;padding:10px 12px;border:1px solid var(--b1);border-radius:var(--r);background:var(--s2)"
+  >
+    <div class="subtarea-form-title" style="margin-bottom:8px">
+      <i class="ph ph-flow-arrow" style="color:var(--a)"></i>
+      Vista jerárquica — Composite
+    </div>
+    <div id="stCompositeResumen" class="txt3" style="font-size:11px">—</div>
+    <div id="stCompositeTree" style="margin-top:10px"></div>
   </div>
 
   <div class="subtarea-lista" id="stLista">
@@ -94,14 +106,36 @@ function _htmlPanelSubtareas() {
 
 async function _cargarSubtareas(tareaId) {
   const lista = document.getElementById("stLista");
+  const compositeWrap = document.getElementById("stCompositeWrap");
+  const compositeResumen = document.getElementById("stCompositeResumen");
+  const compositeTree = document.getElementById("stCompositeTree");
   if (!lista) return;
   lista.innerHTML = '<div class="vacío"><span class="spinner"></span></div>';
+  if (compositeWrap) compositeWrap.style.display = "none";
+  if (compositeResumen)
+    compositeResumen.innerHTML = '<span class="spinner"></span>';
+  if (compositeTree) compositeTree.innerHTML = "";
   _poblarRespSubtarea();
-  try {
-    const subtareas = await api("GET", `/tareas/${tareaId}/subtareas`);
-    _renderizarSubtareas(subtareas);
-  } catch (e) {
+
+  const [subtareasRes, jerarquiaRes] = await Promise.allSettled([
+    api("GET", `/tareas/${tareaId}/subtareas`),
+    api("GET", `/tareas/${tareaId}/jerarquia`),
+  ]);
+
+  if (subtareasRes.status === "fulfilled") {
+    _renderizarSubtareas(subtareasRes.value);
+  } else {
+    const e = subtareasRes.reason;
     lista.innerHTML = `<div class="vacío">Error: ${e.message}</div>`;
+  }
+
+  if (jerarquiaRes.status === "fulfilled") {
+    _renderizarJerarquiaCompuesta(jerarquiaRes.value);
+  } else if (compositeWrap && compositeResumen && compositeTree) {
+    compositeWrap.style.display = "";
+    const msg = jerarquiaRes.reason?.message || "No disponible";
+    compositeResumen.textContent = `No se pudo cargar la jerarquía: ${msg}`;
+    compositeTree.innerHTML = "";
   }
 }
 
@@ -250,6 +284,73 @@ function _poblarRespSubtarea() {
     </div>`,
     )
     .join("");
+}
+
+function _escHtml(txt) {
+  return String(txt || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function _contarNodosCompuestos(nodo) {
+  const hijos = nodo?.hijos || [];
+  return 1 + hijos.reduce((acc, h) => acc + _contarNodosCompuestos(h), 0);
+}
+
+function _renderNodoCompuesto(nodo, nivel = 0) {
+  const hijos = nodo?.hijos || [];
+  const esCompuesta = nodo?.tipo === "COMPUESTA";
+  const icono = esCompuesta ? "ph-tree-structure" : "ph-dot-outline";
+  const horas = Number(nodo?.horasEstimadas || 0).toFixed(1);
+  const progreso = Number(nodo?.progreso || 0).toFixed(1);
+  const responsables = (nodo?.responsables || []).length;
+  const margen = nivel * 14;
+
+  return `
+    <div style="margin-left:${margen}px;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--b1);border-radius:8px;background:var(--s1)">
+        <i class="ph ${icono}" style="font-size:15px;color:${esCompuesta ? "var(--a2)" : "var(--t3)"}"></i>
+        <div style="min-width:0;flex:1">
+          <div style="font-size:12px;color:var(--t1);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(nodo?.titulo || "Tarea")}</div>
+          <div class="txt3" style="font-size:10px;font-family:var(--mono)">ID: ${_escHtml((nodo?.id || "").slice(-8))}</div>
+        </div>
+        <span class="badge bi" title="Horas estimadas">${horas}h</span>
+        <span class="badge bb" title="Progreso">${progreso}%</span>
+        <span class="badge ba" title="Responsables">${responsables}</span>
+      </div>
+      ${hijos.map((h) => _renderNodoCompuesto(h, nivel + 1)).join("")}
+    </div>
+  `;
+}
+
+function _renderizarJerarquiaCompuesta(jerarquia) {
+  const wrap = document.getElementById("stCompositeWrap");
+  const resumen = document.getElementById("stCompositeResumen");
+  const tree = document.getElementById("stCompositeTree");
+  if (!wrap || !resumen || !tree) return;
+
+  wrap.style.display = "";
+  if (!jerarquia || typeof jerarquia !== "object") {
+    resumen.textContent = "Jerarquía no disponible para esta tarea.";
+    tree.innerHTML = "";
+    return;
+  }
+
+  const totalNodos = _contarNodosCompuestos(jerarquia);
+  const horas = Number(jerarquia.horasEstimadas || 0).toFixed(1);
+  const progreso = Number(jerarquia.progreso || 0).toFixed(1);
+  const responsables = (jerarquia.responsables || []).length;
+
+  resumen.innerHTML = `
+    <span class="badge bb">Progreso ${progreso}%</span>
+    <span class="badge bi">Horas ${horas}h</span>
+    <span class="badge ba">Responsables ${responsables}</span>
+    <span class="badge bg">Nodos ${totalNodos}</span>
+  `;
+  tree.innerHTML = _renderNodoCompuesto(jerarquia, 0);
 }
 
 /* ══════════════════════════════════════════════════

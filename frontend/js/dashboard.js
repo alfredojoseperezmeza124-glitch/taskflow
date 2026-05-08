@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════
    TaskFlow — dashboard.js
-   Dashboard en tiempo real con Highcharts +
-   sistema de menciones @usuario en comentarios
+   Dashboard avanzado con filtros jerárquicos (fase/etapa)
+   y métricas integradas con tareas + subtareas de etapa
 ════════════════════════════════════════════════════ */
 
 /* ── Highcharts CDN (cargado una vez) ── */
@@ -22,14 +22,13 @@ async function _cargarHighcharts() {
   _hcCargado = true;
 }
 
-/* ── Paleta de colores adaptada al tema del app ── */
+/* ── Paleta adaptada al tema ── */
 function _hcColores() {
   const esClaro =
     document.documentElement.getAttribute("data-tema") === "claro";
   return {
     bg: esClaro ? "#ffffff" : "#111113",
     tooltipBg: esClaro ? "#ffffff" : "#141417",
-    plot: esClaro ? "#f1f1f3" : "#18181b",
     txt: esClaro ? "#52525b" : "#a1a1aa",
     txth: esClaro ? "#09090b" : "#fafafa",
     borde: esClaro ? "#d4d4d8" : "#3f3f46",
@@ -41,6 +40,7 @@ function _hcColores() {
       "#06b6d4",
       "#a855f7",
       "#ec4899",
+      "#14b8a6",
     ],
   };
 }
@@ -85,7 +85,7 @@ function _hcBase() {
     },
     plotOptions: {
       series: {
-        animation: { duration: 500 },
+        animation: { duration: 450 },
         states: { inactive: { opacity: 1 } },
       },
     },
@@ -93,16 +93,151 @@ function _hcBase() {
   };
 }
 
+const _DASH_CACHE_TTL = 60 * 1000;
+const _DASH_LIMITE_TAREAS = 200;
+
 /* Estado del dashboard */
 let _dashProyId = null;
 let _dashTimer = null;
 let _dashMetricas = null;
+let _dashDataBase = null;
+let _dashProyectos = [];
+const _dashCacheDatos = new Map();
+
+function _dashEsc(txt = "") {
+  return String(txt)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function _dashEsColumnaCompletada(nombreColumna = "") {
+  const nombre = String(nombreColumna).toLowerCase();
+  return (
+    nombre.includes("complet") ||
+    nombre.includes("listo") ||
+    nombre.includes("done")
+  );
+}
+
+function _dashEsColumnaEnProgreso(nombreColumna = "") {
+  const nombre = String(nombreColumna).toLowerCase();
+  return (
+    nombre.includes("progreso") ||
+    nombre.includes("progress") ||
+    nombre.includes("doing")
+  );
+}
+
+function _dashAFecha(valor) {
+  if (!valor) return null;
+  const d = new Date(valor);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function _dashNombreColumna(base, columnaId) {
+  if (!columnaId) return "Sin columna";
+  return (
+    base?.columnasPorId?.[columnaId] || `Col ${String(columnaId).slice(-6)}`
+  );
+}
+
+function _dashNombreFase(base, faseId) {
+  if (!faseId) return "Sin fase";
+  return (
+    base?.fasesPorId?.[faseId]?.nombre || `Fase ${String(faseId).slice(-6)}`
+  );
+}
+
+function _dashNombreEtapa(base, etapaId) {
+  if (!etapaId) return "Sin etapa";
+  return (
+    base?.etapasPorId?.[etapaId]?.nombre || `Etapa ${String(etapaId).slice(-6)}`
+  );
+}
+
+function _dashFaseDesdeTarea(base, tarea) {
+  if (tarea?.faseId) return tarea.faseId;
+  const etapaId = tarea?.etapaId;
+  if (!etapaId) return "";
+  return base?.etapasPorId?.[etapaId]?.faseId || "";
+}
+
+function _dashVentanasSemanales(cantidad) {
+  const semanas = Math.max(1, Number(cantidad) || 8);
+  const hoy = new Date();
+  const inicioSemanaActual = new Date(
+    Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate()),
+  );
+  const dia = inicioSemanaActual.getUTCDay();
+  const ajuste = (dia + 6) % 7; // lunes = 0
+  inicioSemanaActual.setUTCDate(inicioSemanaActual.getUTCDate() - ajuste);
+  inicioSemanaActual.setUTCHours(0, 0, 0, 0);
+
+  const ventanas = [];
+  for (let i = semanas - 1; i >= 0; i--) {
+    const inicio = new Date(inicioSemanaActual);
+    inicio.setUTCDate(inicio.getUTCDate() - i * 7);
+    const fin = new Date(inicio);
+    fin.setUTCDate(fin.getUTCDate() + 7);
+    ventanas.push({
+      inicio,
+      fin,
+      label: inicio.toLocaleDateString("es-CO", {
+        day: "2-digit",
+        month: "short",
+      }),
+    });
+  }
+  return ventanas;
+}
+
+function _dashContarPorVentana(items, ventanas, selectorFecha) {
+  const conteo = ventanas.map(() => 0);
+  for (const item of items || []) {
+    const fecha = _dashAFecha(selectorFecha(item));
+    if (!fecha) continue;
+    for (let i = 0; i < ventanas.length; i++) {
+      const v = ventanas[i];
+      if (fecha >= v.inicio && fecha < v.fin) {
+        conteo[i] += 1;
+        break;
+      }
+    }
+  }
+  return conteo;
+}
+
+function _dashTop(entradas, limite = 8) {
+  return [...(entradas || [])].sort(([, a], [, b]) => b - a).slice(0, limite);
+}
+
+function _dashCombinarMapas(destino, fuente) {
+  Object.entries(fuente || {}).forEach(([k, v]) => {
+    destino[k] = v;
+  });
+}
+
+function _dashDataVacia(esGlobal = false) {
+  return {
+    esGlobal,
+    proyectoId: null,
+    tareas: [],
+    subtareasEtapa: [],
+    columnasPorId: {},
+    fasesPorId: {},
+    etapasPorId: {},
+    usuariosPorId: {},
+    proyectosPorId: {},
+  };
+}
 
 /* ── FUNCIÓN PRINCIPAL ── */
 async function cargarDashboard() {
   if (!S) return;
 
-  // Fecha en el header
   const fechaEl = document.getElementById("dashFecha");
   if (fechaEl) {
     fechaEl.textContent = new Date().toLocaleDateString("es-CO", {
@@ -113,7 +248,6 @@ async function cargarDashboard() {
     });
   }
 
-  // Saludo personalizado
   const saludo = document.getElementById("dashSaludo");
   if (saludo) {
     const hora = new Date().getHours();
@@ -122,45 +256,22 @@ async function cargarDashboard() {
     saludo.textContent = `${turno}, ${S.usuario.nombre.split(" ")[0]}`;
   }
 
-  // Cargar Highcharts y el selector en paralelo, luego métricas y proyectos en paralelo
-  await _cargarHighcharts();
-  await Promise.all([_poblarSelectorDash(), _cargarProyectosRecientes()]);
-  await _cargarMetricasDash(_dashProyId);
-
-  // Notificaciones (no PM)
-  if (S.usuario.rol !== "PROJECT_MANAGER") {
-    try {
-      const ns = await api("GET", "/notificaciones/");
-      const noLeidas = ns.filter((n) => !n.leida).length;
-      const el = document.getElementById("stNotif");
-      if (el) el.textContent = noLeidas;
-      actualizarBadgeNotif(noLeidas);
-    } catch (_) {}
-  } else {
-    const el = document.getElementById("stNotif");
-    if (el) el.textContent = "—";
-  }
-
-  // Usuarios (solo ADMIN)
-  if (S.usuario.rol === "ADMIN") {
-    document.getElementById("statUsuariosWrap").style.display = "";
-    try {
-      const us = await api("GET", "/usuarios/");
-      const el = document.getElementById("stUsers");
-      if (el) el.textContent = us.length;
-    } catch (_) {}
-  }
-
-  // Botón nuevo proyecto
   const acciones = document.getElementById("dashAcciones");
   if (
     acciones &&
     (S.usuario.rol === "PROJECT_MANAGER" || S.usuario.rol === "ADMIN")
   ) {
-    acciones.innerHTML = `<button class="btn btn-primary btn-sm" onclick="abrirModal('mProy')">+ Nuevo proyecto</button>`;
+    acciones.innerHTML =
+      `<button class="btn btn-primary btn-sm" onclick="abrirModal('mProy')">` +
+      `<i class="ph ph-plus"></i> Nuevo proyecto</button>`;
+  } else if (acciones) {
+    acciones.innerHTML = "";
   }
 
-  // Auto-refresh cada 60 segundos
+  await _cargarHighcharts();
+  await Promise.all([_poblarSelectorDash(), _cargarProyectosRecientes()]);
+  await _cargarMetricasDash(_dashProyId, false);
+
   clearInterval(_dashTimer);
   _dashTimer = setInterval(() => {
     if (
@@ -168,14 +279,15 @@ async function cargarDashboard() {
         .getElementById("pantalla-dashboard")
         ?.classList.contains("activa")
     ) {
-      _cargarMetricasDash(_dashProyId);
+      _cargarMetricasDash(_dashProyId, true);
     }
   }, 60000);
 }
 
-function refrescarDashboard() {
-  _cargarMetricasDash(_dashProyId);
-  _cargarProyectosRecientes();
+async function refrescarDashboard() {
+  _dashCacheDatos.clear();
+  await Promise.all([_poblarSelectorDash(), _cargarProyectosRecientes()]);
+  await _cargarMetricasDash(_dashProyId, true);
   toast("Dashboard actualizado");
 }
 
@@ -183,16 +295,58 @@ async function _poblarSelectorDash() {
   const sel = document.getElementById("selDashProy");
   if (!sel) return;
   try {
-    const ps = await api("GET", "/proyectos/");
+    _dashProyectos = await api("GET", "/proyectos/");
     sel.innerHTML =
       '<option value="">— Todos los proyectos —</option>' +
-      ps.map((p) => `<option value="${p.id}">${p.nombre}</option>`).join("");
-  } catch (_) {}
+      _dashProyectos
+        .map((p) => `<option value="${p.id}">${_dashEsc(p.nombre)}</option>`)
+        .join("");
+
+    const seleccionValida =
+      !_dashProyId || _dashProyectos.some((p) => p.id === _dashProyId);
+    if (!seleccionValida) _dashProyId = null;
+    sel.value = _dashProyId || "";
+  } catch (_) {
+    _dashProyectos = [];
+    _dashProyId = null;
+    sel.innerHTML = '<option value="">— Sin proyectos —</option>';
+  }
 }
 
 async function actualizarDashboardProy(proyId) {
   _dashProyId = proyId || null;
-  await _cargarMetricasDash(_dashProyId);
+  if (_dashProyId) proyActualId = _dashProyId;
+  await _cargarMetricasDash(_dashProyId, false);
+}
+
+function onCambioFaseDashboard() {
+  if (!_dashDataBase) return;
+  _dashPoblarFasesEtapas(_dashDataBase);
+  _renderDashboardFiltrado();
+}
+
+function onCambioFiltroDashboard() {
+  _renderDashboardFiltrado();
+}
+
+function limpiarFiltrosDashboard() {
+  const porDefecto = {
+    selDashFase: "",
+    selDashEtapa: "",
+    selDashPrio: "",
+    selDashTipo: "",
+    selDashResp: "",
+    selDashContexto: "todos",
+    selDashSemanas: "8",
+  };
+  Object.entries(porDefecto).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  });
+  const chk = document.getElementById("chkDashIncluirSubEtapa");
+  if (chk) chk.checked = true;
+  if (_dashDataBase) _dashPoblarFasesEtapas(_dashDataBase);
+  _renderDashboardFiltrado();
 }
 
 /* Helper: actualiza valor y subtítulo de una KPI card */
@@ -204,254 +358,769 @@ function _setKpi(id, valor, sub) {
   if (subEl && sub !== undefined) subEl.textContent = sub;
 }
 
-async function _cargarMetricasDash(proyId) {
-  if (!S) return;
+async function _dashObtenerMapaUsuarios() {
+  if (typeof _obtenerMapaUsuarios === "function") {
+    try {
+      return await _obtenerMapaUsuarios();
+    } catch (_) {}
+  }
   try {
-    const ps = await api("GET", "/proyectos/");
-
-    if (proyId) {
-      // Métricas de un proyecto específico
-      _dashMetricas = await api("GET", `/proyectos/${proyId}/metricas`);
-      const el = document.getElementById("stProy");
-      if (el) el.textContent = ps.length;
-      const elT = document.getElementById("stTareas");
-      if (elT) elT.textContent = _dashMetricas.totalTareas;
-      const elV = document.getElementById("stVencidas");
-      if (elV) elV.textContent = _dashMetricas.tareasVencidas;
-    } else {
-      // Agregar métricas de todos los proyectos
-      _setKpi(
-        "stProy",
-        ps.length,
-        `${ps.length} proyecto${ps.length !== 1 ? "s" : ""}`,
-      );
-      let totalTareas = 0,
-        totalVencidas = 0;
-      const estadosAgregados = {},
-        prioAgregada = {},
-        tipoAgregado = {},
-        usuariosAgregados = {};
-      const velocidadAgg = {};
-
-      // Cargar todas las métricas en paralelo en vez de en serie
-      const todasMetricas = await Promise.all(
-        ps.map((p) =>
-          api("GET", `/proyectos/${p.id}/metricas`).catch(() => null),
-        ),
-      );
-      todasMetricas.filter(Boolean).forEach((m) => {
-        totalTareas += m.totalTareas || 0;
-        totalVencidas += m.tareasVencidas || 0;
-        Object.entries(m.tareasPorEstado || {}).forEach(
-          ([k, v]) => (estadosAgregados[k] = (estadosAgregados[k] || 0) + v),
-        );
-        Object.entries(m.tareasPorPrioridad || {}).forEach(
-          ([k, v]) => (prioAgregada[k] = (prioAgregada[k] || 0) + v),
-        );
-        Object.entries(m.tareasPorTipo || {}).forEach(
-          ([k, v]) => (tipoAgregado[k] = (tipoAgregado[k] || 0) + v),
-        );
-        Object.entries(m.tareasPorUsuario || {}).forEach(
-          ([k, v]) => (usuariosAgregados[k] = (usuariosAgregados[k] || 0) + v),
-        );
-        (m.velocidadPorSemana || []).forEach(
-          (s) =>
-            (velocidadAgg[s.semana] =
-              (velocidadAgg[s.semana] || 0) + s.creadas),
-        );
-      });
-
-      _dashMetricas = {
-        totalTareas,
-        tareasVencidas: totalVencidas,
-        tareasPorEstado: estadosAgregados,
-        tareasPorPrioridad: prioAgregada,
-        tareasPorTipo: tipoAgregado,
-        tareasPorUsuario: usuariosAgregados,
-        velocidadPorSemana: Object.entries(velocidadAgg).map(([s, c]) => ({
-          semana: s,
-          creadas: c,
-        })),
-      };
-
-      _setKpi("stTareas", totalTareas, `en ${ps.length} proyectos`);
-      _setKpi(
-        "stVencidas",
-        totalVencidas,
-        totalVencidas > 0 ? "requieren atención" : "al día ✓",
-      );
-    }
-
-    _renderizarGraficos(_dashMetricas);
-  } catch (e) {
-    console.error("Dashboard error:", e.message);
+    const lista = await api("GET", "/usuarios/activos");
+    const mapa = {};
+    (lista || []).forEach((u) => {
+      mapa[u.id] = u;
+    });
+    return mapa;
+  } catch (_) {
+    return {};
   }
 }
 
-function _renderizarGraficos(m) {
-  if (!window.Highcharts || !m) return;
+async function _dashListarTodasTareasProyecto(proyId) {
+  const tareas = [];
+  let pagina = 1;
+  let totalPaginas = 1;
 
-  const c = _hcColores();
+  while (pagina <= totalPaginas) {
+    const res = await api(
+      "GET",
+      `/proyectos/${proyId}/tareas?pagina=${pagina}&limite=${_DASH_LIMITE_TAREAS}`,
+    );
+    const datos = Array.isArray(res?.datos)
+      ? res.datos
+      : Array.isArray(res)
+        ? res
+        : [];
+    tareas.push(...datos);
 
-  /* 1. Donut — tareas por columna */
-  const estadoEntradas = Object.entries(m.tareasPorEstado || {});
-  Highcharts.chart("chartColumnas", {
-    ..._hcBase(),
-    chart: { ..._hcBase().chart, type: "pie" },
-    plotOptions: {
-      pie: {
-        innerSize: "68%",
-        borderWidth: 0,
-        borderRadius: 8,
-        slicedOffset: 2,
-        dataLabels: {
-          enabled: true,
-          distance: 10,
-          connectorWidth: 1,
-          connectorColor: c.borde,
-          style: { fontSize: "10px", color: c.txt, fontWeight: "500", textOutline: "none" },
-          formatter() {
-            return `${this.point.name}: ${this.y}`;
-          },
-        },
-        showInLegend: false,
-      },
-    },
-    series: [
-      {
-        name: "Tareas",
-        data: estadoEntradas.length
-          ? estadoEntradas.map(([k, v]) => ({ name: k, y: v }))
-          : [{ name: "Sin datos", y: 1, color: c.borde }],
-      },
-    ],
+    if (!res || typeof res !== "object" || !("totalPaginas" in res)) {
+      break;
+    }
+    totalPaginas = Math.max(1, Number(res.totalPaginas) || 1);
+    pagina += 1;
+  }
+
+  return tareas;
+}
+
+function _dashColumnasPorId(tableros = []) {
+  const columnas = {};
+  (tableros || []).forEach((tablero) => {
+    (tablero.columnas || []).forEach((col) => {
+      if (col?.id) columnas[col.id] = col.nombre || col.id;
+    });
+  });
+  return columnas;
+}
+
+async function _dashConstruirDataProyecto(proyecto) {
+  const proyId = typeof proyecto === "string" ? proyecto : proyecto?.id;
+  if (!proyId) return _dashDataVacia(false);
+
+  const base = _dashDataVacia(false);
+  base.proyectoId = proyId;
+  if (typeof proyecto === "object" && proyecto?.id) {
+    base.proyectosPorId[proyecto.id] = proyecto;
+  }
+
+  const [tableros, estructura, subtareasEtapa, tareas] = await Promise.all([
+    api("GET", `/proyectos/${proyId}/tableros`).catch(() => []),
+    cargarEstructuraProyecto(proyId).catch(() => ({
+      fases: [],
+      fasesPorId: {},
+      etapasPorFase: {},
+      etapasPorId: {},
+    })),
+    api("GET", `/proyectos/${proyId}/subtareas-etapa`).catch(() => []),
+    _dashListarTodasTareasProyecto(proyId).catch(() => []),
+  ]);
+
+  base.columnasPorId = _dashColumnasPorId(tableros);
+  base.tareas = Array.isArray(tareas) ? tareas : [];
+  base.subtareasEtapa = Array.isArray(subtareasEtapa) ? subtareasEtapa : [];
+
+  Object.values(estructura?.fasesPorId || {}).forEach((fase) => {
+    if (!fase?.id) return;
+    base.fasesPorId[fase.id] = { ...fase, proyectoId: proyId };
+  });
+  Object.values(estructura?.etapasPorId || {}).forEach((etapa) => {
+    if (!etapa?.id) return;
+    base.etapasPorId[etapa.id] = { ...etapa, proyectoId: proyId };
   });
 
-  /* 2. Barras horizontales — prioridad */
+  return base;
+}
+
+async function _dashConstruirDataGlobal() {
+  const base = _dashDataVacia(true);
+  if (!_dashProyectos.length) return base;
+
+  const lotes = await Promise.all(
+    _dashProyectos.map((p) => _dashConstruirDataProyecto(p).catch(() => null)),
+  );
+
+  lotes.filter(Boolean).forEach((item) => {
+    base.tareas.push(...(item.tareas || []));
+    base.subtareasEtapa.push(...(item.subtareasEtapa || []));
+    _dashCombinarMapas(base.columnasPorId, item.columnasPorId);
+    _dashCombinarMapas(base.fasesPorId, item.fasesPorId);
+    _dashCombinarMapas(base.etapasPorId, item.etapasPorId);
+    _dashCombinarMapas(base.proyectosPorId, item.proyectosPorId);
+  });
+
+  return base;
+}
+
+async function _dashCargarBase(proyId, forzar = false) {
+  const key = proyId || "__all__";
+  const cache = _dashCacheDatos.get(key);
+  if (!forzar && cache && Date.now() - cache.ts < _DASH_CACHE_TTL) {
+    return cache.data;
+  }
+
+  const data = proyId
+    ? await _dashConstruirDataProyecto(
+        _dashProyectos.find((p) => p.id === proyId) || { id: proyId },
+      )
+    : await _dashConstruirDataGlobal();
+
+  data.usuariosPorId = await _dashObtenerMapaUsuarios();
+  _dashCacheDatos.set(key, { ts: Date.now(), data });
+  return data;
+}
+
+function _dashPoblarFiltros(base) {
+  _dashPoblarFasesEtapas(base);
+  _dashPoblarResponsables(base);
+}
+
+function _dashPoblarFasesEtapas(base) {
+  const selFase = document.getElementById("selDashFase");
+  const selEtapa = document.getElementById("selDashEtapa");
+  if (!selFase || !selEtapa) return;
+
+  const faseActual = selFase.value || "";
+  const etapaActual = selEtapa.value || "";
+
+  const fases = Object.values(base?.fasesPorId || {}).sort((a, b) =>
+    String(a.nombre || "").localeCompare(String(b.nombre || ""), "es", {
+      sensitivity: "base",
+    }),
+  );
+  selFase.innerHTML =
+    '<option value="">— Todas las fases —</option>' +
+    fases
+      .map((fase) => {
+        const nombreProyecto = base?.proyectosPorId?.[fase.proyectoId]?.nombre;
+        const sufijo =
+          base?.esGlobal && nombreProyecto ? ` · ${nombreProyecto}` : "";
+        return `<option value="${fase.id}">${_dashEsc((fase.nombre || "Fase") + sufijo)}</option>`;
+      })
+      .join("");
+  selFase.value = fases.some((fase) => fase.id === faseActual)
+    ? faseActual
+    : "";
+
+  const faseSeleccionada = selFase.value || "";
+  const etapasTodas = Object.values(base?.etapasPorId || {});
+  const etapas = etapasTodas
+    .filter((etapa) => !faseSeleccionada || etapa.faseId === faseSeleccionada)
+    .sort((a, b) =>
+      String(a.nombre || "").localeCompare(String(b.nombre || ""), "es", {
+        sensitivity: "base",
+      }),
+    );
+  selEtapa.innerHTML =
+    '<option value="">— Todas las etapas —</option>' +
+    etapas
+      .map((etapa) => {
+        const nombreProyecto = base?.proyectosPorId?.[etapa.proyectoId]?.nombre;
+        const sufijo =
+          base?.esGlobal && nombreProyecto ? ` · ${nombreProyecto}` : "";
+        return `<option value="${etapa.id}">${_dashEsc((etapa.nombre || "Etapa") + sufijo)}</option>`;
+      })
+      .join("");
+  selEtapa.value = etapas.some((etapa) => etapa.id === etapaActual)
+    ? etapaActual
+    : "";
+
+  selFase.disabled = !fases.length;
+  selEtapa.disabled = !etapasTodas.length;
+}
+
+function _dashPoblarResponsables(base) {
+  const sel = document.getElementById("selDashResp");
+  if (!sel) return;
+
+  const actual = sel.value || "";
+  const ids = new Set();
+  (base?.tareas || []).forEach((t) =>
+    (t.responsables || []).forEach((id) => ids.add(id)),
+  );
+  (base?.subtareasEtapa || []).forEach((s) =>
+    (s.responsables || []).forEach((id) => ids.add(id)),
+  );
+
+  const mapa = base?.usuariosPorId || {};
+  const opciones = [...ids]
+    .map((id) => ({
+      id,
+      nombre: mapa[id]?.nombre || `Usuario ${String(id).slice(-6)}`,
+    }))
+    .sort((a, b) =>
+      a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }),
+    );
+
+  sel.innerHTML =
+    '<option value="">— Todo el equipo —</option>' +
+    opciones
+      .map((o) => `<option value="${o.id}">${_dashEsc(o.nombre)}</option>`)
+      .join("");
+  sel.value = opciones.some((o) => o.id === actual) ? actual : "";
+  sel.disabled = !opciones.length;
+}
+
+function _leerFiltrosDash() {
+  return {
+    faseId: document.getElementById("selDashFase")?.value || "",
+    etapaId: document.getElementById("selDashEtapa")?.value || "",
+    prioridad: document.getElementById("selDashPrio")?.value || "",
+    tipo: document.getElementById("selDashTipo")?.value || "",
+    responsableId: document.getElementById("selDashResp")?.value || "",
+    contexto: document.getElementById("selDashContexto")?.value || "todos",
+    semanas: Number(document.getElementById("selDashSemanas")?.value || 8),
+    incluyeSubEtapa:
+      document.getElementById("chkDashIncluirSubEtapa")?.checked !== false,
+  };
+}
+
+async function _cargarMetricasDash(proyId, forzar = false) {
+  if (!S) return;
+  try {
+    _dashDataBase = await _dashCargarBase(proyId, forzar);
+    _dashPoblarFiltros(_dashDataBase);
+    _renderDashboardFiltrado();
+  } catch (e) {
+    console.error("Dashboard error:", e.message);
+    const cont = document.getElementById("dashAlertas");
+    if (cont) {
+      cont.innerHTML = `<div class="vacío">Error al cargar dashboard: ${_dashEsc(e.message)}</div>`;
+    }
+  }
+}
+
+function _dashFiltrarData(base, filtros) {
+  const tareas = (base?.tareas || []).filter((t) => {
+    const faseId = _dashFaseDesdeTarea(base, t);
+    const etapaId = t.etapaId || "";
+    const estructurada = !!(faseId || etapaId);
+
+    if (filtros.faseId && faseId !== filtros.faseId) return false;
+    if (filtros.etapaId && etapaId !== filtros.etapaId) return false;
+    if (filtros.prioridad && t.prioridad !== filtros.prioridad) return false;
+    if (filtros.tipo && t.tipo !== filtros.tipo) return false;
+    if (
+      filtros.responsableId &&
+      !(t.responsables || []).includes(filtros.responsableId)
+    ) {
+      return false;
+    }
+    if (filtros.contexto === "estructura" && !estructurada) return false;
+    if (filtros.contexto === "legadas" && estructurada) return false;
+    return true;
+  });
+
+  const subtareasEtapa = (base?.subtareasEtapa || []).filter((s) => {
+    if (filtros.contexto === "legadas") return false;
+    const faseId = s.faseId || base?.etapasPorId?.[s.etapaId]?.faseId || "";
+    const etapaId = s.etapaId || "";
+    if (filtros.faseId && faseId !== filtros.faseId) return false;
+    if (filtros.etapaId && etapaId !== filtros.etapaId) return false;
+    if (
+      filtros.responsableId &&
+      !(s.responsables || []).includes(filtros.responsableId)
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  return { tareas, subtareasEtapa };
+}
+
+function _dashConstruirResumen(base, filtrado, filtros) {
+  const ahora = new Date();
+  const tareas = filtrado.tareas || [];
+  const subtareasEtapa = filtros.incluyeSubEtapa
+    ? filtrado.subtareasEtapa || []
+    : [];
+
+  const totalTareas = tareas.length;
+  const totalSubEtapa = filtrado.subtareasEtapa.length;
+  const totalTrabajo = totalTareas + subtareasEtapa.length;
+
+  const completadasTareas = tareas.filter((t) =>
+    _dashEsColumnaCompletada(_dashNombreColumna(base, t.columnaId)),
+  ).length;
+  const enProgresoTareas = tareas.filter((t) =>
+    _dashEsColumnaEnProgreso(_dashNombreColumna(base, t.columnaId)),
+  ).length;
+  const completadasSubEtapa = subtareasEtapa.filter((s) => s.completada).length;
+  const completadasTrabajo = completadasTareas + completadasSubEtapa;
+
+  const vencidasTareas = tareas.filter((t) => t.estaVencida).length;
+  const vencidasSub = subtareasEtapa.filter((s) => {
+    if (s.completada) return false;
+    const fecha = _dashAFecha(s.fechaVencimiento);
+    return !!(fecha && fecha < ahora);
+  }).length;
+  const vencidas = vencidasTareas + vencidasSub;
+
+  const estructuradas = tareas.filter(
+    (t) => !!(_dashFaseDesdeTarea(base, t) || t.etapaId),
+  ).length;
+  const legadas = totalTareas - estructuradas;
+  const coberturaEstructura = totalTareas
+    ? Math.round((estructuradas / totalTareas) * 100)
+    : 0;
+  const porcentajeCompletado = totalTrabajo
+    ? Math.round((completadasTrabajo / totalTrabajo) * 100)
+    : 0;
+
+  return {
+    totalTrabajo,
+    totalTareas,
+    totalSubEtapa,
+    enProgresoTareas,
+    completadasTareas,
+    completadasSubEtapa,
+    vencidas,
+    estructuradas,
+    legadas,
+    coberturaEstructura,
+    porcentajeCompletado,
+  };
+}
+
+function _dashPintarKpis(resumen, filtrado, filtros) {
+  _setKpi(
+    "stDashTrabajo",
+    resumen.totalTrabajo,
+    `${resumen.porcentajeCompletado}% completado`,
+  );
+  _setKpi(
+    "stDashTareas",
+    resumen.totalTareas,
+    `${resumen.enProgresoTareas} en progreso`,
+  );
+  _setKpi(
+    "stDashSubEtapas",
+    resumen.totalSubEtapa,
+    filtros.incluyeSubEtapa
+      ? `${resumen.completadasSubEtapa} completadas`
+      : "excluidas del consolidado",
+  );
+  _setKpi(
+    "stDashVencidas",
+    resumen.vencidas,
+    resumen.vencidas > 0 ? "requieren atención" : "al día ✓",
+  );
+  _setKpi(
+    "stDashCobertura",
+    `${resumen.coberturaEstructura}%`,
+    `${resumen.legadas} legadas / ${resumen.estructuradas} estructuradas`,
+  );
+}
+
+function _dashRenderInsights(base, filtrado, resumen, filtros) {
+  const cont = document.getElementById("dashAlertas");
+  if (!cont) return;
+
+  const alertas = [];
+
+  if (resumen.legadas > 0) {
+    alertas.push(
+      `⚠️ Hay <strong>${resumen.legadas}</strong> tareas legadas sin fase/etapa. ` +
+        `Conviene clasificarlas para mejorar trazabilidad.`,
+    );
+  } else if (resumen.totalTareas > 0) {
+    alertas.push("✅ Todas las tareas visibles están alineadas a fase/etapa.");
+  }
+
+  if (filtros.incluyeSubEtapa) {
+    const pendientesPorEtapa = {};
+    (filtrado.subtareasEtapa || []).forEach((s) => {
+      if (s.completada) return;
+      const nombre = s.etapaNombre || _dashNombreEtapa(base, s.etapaId);
+      pendientesPorEtapa[nombre] = (pendientesPorEtapa[nombre] || 0) + 1;
+    });
+    const [etapaTop, pendientes] = _dashTop(
+      Object.entries(pendientesPorEtapa),
+      1,
+    )[0] || ["", 0];
+    if (pendientes > 0) {
+      alertas.push(
+        `🧩 La etapa con mayor pendiente es <strong>${_dashEsc(etapaTop)}</strong> ` +
+          `con <strong>${pendientes}</strong> subtareas abiertas.`,
+      );
+    }
+  }
+
+  const carga = {};
+  const acumularCarga = (id) => {
+    carga[id] = (carga[id] || 0) + 1;
+  };
+
+  (filtrado.tareas || []).forEach((t) => {
+    if (!(t.responsables || []).length) {
+      acumularCarga("__sin_responsable__");
+      return;
+    }
+    (t.responsables || []).forEach((id) => acumularCarga(id));
+  });
+
+  if (filtros.incluyeSubEtapa) {
+    (filtrado.subtareasEtapa || []).forEach((s) => {
+      if (!(s.responsables || []).length) return;
+      (s.responsables || []).forEach((id) => acumularCarga(id));
+    });
+  }
+
+  const [responsableTop, cargaTop] = _dashTop(Object.entries(carga), 1)[0] || [
+    "",
+    0,
+  ];
+  if (cargaTop > 0) {
+    const nombreResp =
+      responsableTop === "__sin_responsable__"
+        ? "Sin responsable"
+        : base?.usuariosPorId?.[responsableTop]?.nombre ||
+          `Usuario ${String(responsableTop).slice(-6)}`;
+    alertas.push(
+      `👥 Mayor carga actual: <strong>${_dashEsc(nombreResp)}</strong> con ` +
+        `<strong>${cargaTop}</strong> asignaciones.`,
+    );
+  }
+
+  if (!alertas.length) {
+    cont.innerHTML =
+      '<div class="vacío">Sin datos suficientes para generar insights.</div>';
+    return;
+  }
+
+  cont.innerHTML = alertas
+    .map(
+      (msg) =>
+        `<div style="padding:10px 12px;border:1px solid var(--b1);border-radius:10px;background:var(--s2);font-size:12px;color:var(--t2);margin-bottom:8px">${msg}</div>`,
+    )
+    .join("");
+}
+
+function _renderDashboardFiltrado() {
+  if (!window.Highcharts || !_dashDataBase) return;
+  const filtros = _leerFiltrosDash();
+  const filtrado = _dashFiltrarData(_dashDataBase, filtros);
+  const resumen = _dashConstruirResumen(_dashDataBase, filtrado, filtros);
+  _dashMetricas = resumen;
+  _dashPintarKpis(resumen, filtrado, filtros);
+  _renderizarGraficos(_dashDataBase, filtrado, resumen, filtros);
+  _dashRenderInsights(_dashDataBase, filtrado, resumen, filtros);
+}
+
+function _renderizarGraficos(base, filtrado, resumen, filtros) {
+  if (!window.Highcharts) return;
+
+  const c = _hcColores();
+  const baseChart = _hcBase();
+
+  const estadoMap = {};
+  (filtrado.tareas || []).forEach((t) => {
+    const nombre = _dashNombreColumna(base, t.columnaId);
+    estadoMap[nombre] = (estadoMap[nombre] || 0) + 1;
+  });
+  if (filtros.incluyeSubEtapa) {
+    const pendientes = (filtrado.subtareasEtapa || []).filter(
+      (s) => !s.completada,
+    ).length;
+    const completadas = (filtrado.subtareasEtapa || []).filter(
+      (s) => s.completada,
+    ).length;
+    if (pendientes > 0) estadoMap["Subtareas etapa · Pendientes"] = pendientes;
+    if (completadas > 0)
+      estadoMap["Subtareas etapa · Completadas"] = completadas;
+  }
+  const estadoEntradas = _dashTop(Object.entries(estadoMap), 12);
+  const estadoCategorias = estadoEntradas.length
+    ? estadoEntradas.map(([k]) => k)
+    : ["Sin datos"];
+  const estadoValores = estadoEntradas.length
+    ? estadoEntradas.map(([, v]) => v)
+    : [0];
+  Highcharts.chart("chartDashEstado", {
+    ...baseChart,
+    chart: { ...baseChart.chart, type: "column" },
+    xAxis: { ...baseChart.xAxis, categories: estadoCategorias },
+    yAxis: { ...baseChart.yAxis, allowDecimals: false },
+    legend: { enabled: false },
+    plotOptions: {
+      column: {
+        borderRadius: 6,
+        borderWidth: 0,
+        colorByPoint: true,
+        pointPadding: 0.08,
+        groupPadding: 0.08,
+      },
+    },
+    series: [{ name: "Items", data: estadoValores }],
+  });
+
+  const semanas = _dashVentanasSemanales(filtros.semanas);
+  const categoriasSemana = semanas.map((s) => s.label);
+  const serieTareas = _dashContarPorVentana(
+    filtrado.tareas || [],
+    semanas,
+    (t) => t.creadoEn,
+  );
+  const serieSubtareas = _dashContarPorVentana(
+    filtrado.subtareasEtapa || [],
+    semanas,
+    (s) => s.creadoEn,
+  );
+  const seriesVelocidad = [
+    { name: "Tareas", data: serieTareas, color: "#6366f1" },
+  ];
+  if (filtros.incluyeSubEtapa) {
+    seriesVelocidad.push({
+      name: "Subtareas etapa",
+      data: serieSubtareas,
+      color: "#14b8a6",
+    });
+  }
+  Highcharts.chart("chartDashVelocidad", {
+    ...baseChart,
+    chart: { ...baseChart.chart, type: "area" },
+    xAxis: { ...baseChart.xAxis, categories: categoriasSemana },
+    yAxis: { ...baseChart.yAxis, allowDecimals: false },
+    plotOptions: {
+      area: {
+        fillOpacity: 0.18,
+        lineWidth: 3,
+        marker: { enabled: categoriasSemana.length <= 10, radius: 3 },
+      },
+    },
+    series: seriesVelocidad,
+  });
+
+  const faseMap = {};
+  (filtrado.tareas || []).forEach((t) => {
+    const nombre = _dashNombreFase(base, _dashFaseDesdeTarea(base, t));
+    faseMap[nombre] = (faseMap[nombre] || 0) + 1;
+  });
+  if (filtros.incluyeSubEtapa) {
+    (filtrado.subtareasEtapa || []).forEach((s) => {
+      const nombre = s.faseNombre || _dashNombreFase(base, s.faseId);
+      faseMap[nombre] = (faseMap[nombre] || 0) + 1;
+    });
+  }
+  const faseEntradas = _dashTop(Object.entries(faseMap), 10);
+  const faseCategorias = faseEntradas.length
+    ? faseEntradas.map(([k]) => k)
+    : ["Sin datos"];
+  const faseValores = faseEntradas.length
+    ? faseEntradas.map(([, v]) => v)
+    : [0];
+  Highcharts.chart("chartDashFase", {
+    ...baseChart,
+    chart: { ...baseChart.chart, type: "bar" },
+    xAxis: { ...baseChart.xAxis, categories: faseCategorias },
+    yAxis: { ...baseChart.yAxis, allowDecimals: false },
+    legend: { enabled: false },
+    plotOptions: {
+      bar: {
+        borderRadius: 6,
+        borderWidth: 0,
+        pointPadding: 0.08,
+        groupPadding: 0.08,
+      },
+    },
+    colors: ["#6366f1"],
+    series: [{ name: "Trabajo", data: faseValores }],
+  });
+
+  const etapaMap = {};
+  (filtrado.tareas || []).forEach((t) => {
+    const nombre = _dashNombreEtapa(base, t.etapaId);
+    if (!etapaMap[nombre]) etapaMap[nombre] = { tareas: 0, subtareas: 0 };
+    etapaMap[nombre].tareas += 1;
+  });
+  if (filtros.incluyeSubEtapa) {
+    (filtrado.subtareasEtapa || []).forEach((s) => {
+      const nombre = s.etapaNombre || _dashNombreEtapa(base, s.etapaId);
+      if (!etapaMap[nombre]) etapaMap[nombre] = { tareas: 0, subtareas: 0 };
+      etapaMap[nombre].subtareas += 1;
+    });
+  }
+  const etapaEntradas = _dashTop(
+    Object.entries(etapaMap).map(([k, v]) => [k, v.tareas + v.subtareas]),
+    8,
+  );
+  const etapaCategorias = etapaEntradas.length
+    ? etapaEntradas.map(([k]) => k)
+    : ["Sin datos"];
+  const etapaTareas = etapaCategorias.map(
+    (nombre) => etapaMap[nombre]?.tareas || 0,
+  );
+  const etapaSubtareas = etapaCategorias.map(
+    (nombre) => etapaMap[nombre]?.subtareas || 0,
+  );
+  const seriesEtapa = [{ name: "Tareas", data: etapaTareas, color: "#6366f1" }];
+  if (filtros.incluyeSubEtapa) {
+    seriesEtapa.push({
+      name: "Subtareas etapa",
+      data: etapaSubtareas,
+      color: "#14b8a6",
+    });
+  }
+  Highcharts.chart("chartDashEtapa", {
+    ...baseChart,
+    chart: { ...baseChart.chart, type: "bar" },
+    xAxis: { ...baseChart.xAxis, categories: etapaCategorias },
+    yAxis: {
+      ...baseChart.yAxis,
+      allowDecimals: false,
+      stackLabels: { enabled: false },
+    },
+    plotOptions: {
+      bar: {
+        stacking: "normal",
+        borderRadius: 6,
+        borderWidth: 0,
+        pointPadding: 0.08,
+        groupPadding: 0.08,
+      },
+    },
+    series: seriesEtapa,
+  });
+
+  const cargaMap = {};
+  const acumular = (id, delta = 1) => {
+    cargaMap[id] = (cargaMap[id] || 0) + delta;
+  };
+  (filtrado.tareas || []).forEach((t) => {
+    if (!(t.responsables || []).length) {
+      acumular("__sin_responsable__");
+      return;
+    }
+    (t.responsables || []).forEach((id) => acumular(id));
+  });
+  if (filtros.incluyeSubEtapa) {
+    (filtrado.subtareasEtapa || []).forEach((s) => {
+      if (!(s.responsables || []).length) return;
+      (s.responsables || []).forEach((id) => acumular(id));
+    });
+  }
+  const cargaEntradas = _dashTop(Object.entries(cargaMap), 8);
+  const cargaCategorias = cargaEntradas.length
+    ? cargaEntradas.map(([id]) =>
+        id === "__sin_responsable__"
+          ? "Sin responsable"
+          : base?.usuariosPorId?.[id]?.nombre ||
+            `Usuario ${String(id).slice(-6)}`,
+      )
+    : ["Sin datos"];
+  const cargaValores = cargaEntradas.length
+    ? cargaEntradas.map(([, v]) => v)
+    : [0];
+  Highcharts.chart("chartDashResponsables", {
+    ...baseChart,
+    chart: { ...baseChart.chart, type: "bar" },
+    xAxis: { ...baseChart.xAxis, categories: cargaCategorias },
+    yAxis: { ...baseChart.yAxis, allowDecimals: false },
+    legend: { enabled: false },
+    plotOptions: {
+      bar: {
+        borderRadius: 6,
+        borderWidth: 0,
+        pointPadding: 0.08,
+        groupPadding: 0.08,
+      },
+    },
+    colors: ["#a855f7"],
+    series: [{ name: "Asignaciones", data: cargaValores }],
+  });
+
+  const ordenPrio = ["BAJA", "MEDIA", "ALTA", "URGENTE"];
+  const prioMap = {};
+  (filtrado.tareas || []).forEach((t) => {
+    const k = t.prioridad || "MEDIA";
+    prioMap[k] = (prioMap[k] || 0) + 1;
+  });
+  const prioEntradas = ordenPrio
+    .map((k) => [k, prioMap[k] || 0])
+    .filter(([, v]) => v > 0);
   const prioColores = {
     BAJA: "#22c55e",
     MEDIA: "#f59e0b",
     ALTA: "#ef4444",
     URGENTE: "#a855f7",
   };
-  const prioEntradas = Object.entries(m.tareasPorPrioridad || {});
-  Highcharts.chart("chartPrioridad", {
-    ..._hcBase(),
-    chart: { ..._hcBase().chart, type: "bar" },
-    xAxis: { categories: prioEntradas.map(([k]) => k), ..._hcBase().xAxis },
-    yAxis: { ..._hcBase().yAxis, allowDecimals: false },
+  const prioData = prioEntradas.length
+    ? prioEntradas.map(([k, v]) => ({ name: k, y: v, color: prioColores[k] }))
+    : [{ name: "Sin datos", y: 1, color: c.borde }];
+  Highcharts.chart("chartDashPrioridad", {
+    ...baseChart,
+    chart: { ...baseChart.chart, type: "pie" },
     plotOptions: {
-      bar: {
-        borderRadius: 6,
+      pie: {
+        innerSize: "64%",
         borderWidth: 0,
-        colorByPoint: true,
-        pointPadding: 0.08,
-        groupPadding: 0.08,
-      },
-    },
-    colors: prioEntradas.map(([k]) => prioColores[k] || "#6366f1"),
-    legend: { enabled: false },
-    series: [
-      {
-        name: "Tareas",
-        data: prioEntradas.length ? prioEntradas.map(([, v]) => v) : [0],
-      },
-    ],
-  });
-
-  /* 3. Línea — velocidad semanal */
-  const vel = m.velocidadPorSemana || [];
-  Highcharts.chart("chartVelocidad", {
-    ..._hcBase(),
-    chart: { ..._hcBase().chart, type: "area" },
-    xAxis: { categories: vel.map((s) => s.semana), ..._hcBase().xAxis },
-    yAxis: { ..._hcBase().yAxis, allowDecimals: false },
-    plotOptions: {
-      area: {
-        fillOpacity: 0.2,
-        lineWidth: 3,
-        borderRadius: 0,
-        marker: {
-          enabled: vel.length <= 10,
-          radius: 4,
-          symbol: "circle",
-          lineWidth: 2,
-          lineColor: "#6366f1",
-          fillColor: c.bg,
+        dataLabels: {
+          enabled: true,
+          style: { color: c.txt, textOutline: "none", fontSize: "10px" },
         },
       },
     },
-    legend: { enabled: false },
-    series: [
-      { name: "Creadas", data: vel.map((s) => s.creadas), color: "#6366f1" },
-    ],
+    series: [{ name: "Tareas", data: prioData }],
   });
 
-  /* 4. Columnas — por tipo */
+  const ordenTipo = ["TASK", "BUG", "FEATURE", "IMPROVEMENT"];
+  const tipoMap = {};
+  (filtrado.tareas || []).forEach((t) => {
+    const k = t.tipo || "TASK";
+    tipoMap[k] = (tipoMap[k] || 0) + 1;
+  });
+  const tipoEntradas = ordenTipo
+    .map((k) => [k, tipoMap[k] || 0])
+    .filter(([, v]) => v > 0);
+  const tipoCategorias = tipoEntradas.length
+    ? tipoEntradas.map(([k]) => k)
+    : ["Sin datos"];
+  const tipoValores = tipoEntradas.length
+    ? tipoEntradas.map(([, v]) => v)
+    : [0];
   const tipoColores = {
+    TASK: "#a1a1aa",
     BUG: "#ef4444",
     FEATURE: "#06b6d4",
-    TASK: "#a1a1aa",
     IMPROVEMENT: "#22c55e",
   };
-  const tipoEntradas = Object.entries(m.tareasPorTipo || {});
-  Highcharts.chart("chartTipo", {
-    ..._hcBase(),
-    chart: { ..._hcBase().chart, type: "column" },
-    xAxis: { categories: tipoEntradas.map(([k]) => k), ..._hcBase().xAxis },
-    yAxis: { ..._hcBase().yAxis, allowDecimals: false },
+  Highcharts.chart("chartDashTipo", {
+    ...baseChart,
+    chart: { ...baseChart.chart, type: "column" },
+    xAxis: { ...baseChart.xAxis, categories: tipoCategorias },
+    yAxis: { ...baseChart.yAxis, allowDecimals: false },
+    legend: { enabled: false },
     plotOptions: {
       column: {
         borderRadius: 6,
         borderWidth: 0,
         colorByPoint: true,
-        pointPadding: 0.12,
+        pointPadding: 0.1,
         groupPadding: 0.1,
       },
     },
-    colors: tipoEntradas.map(([k]) => tipoColores[k] || "#6366f1"),
-    legend: { enabled: false },
-    series: [
-      {
-        name: "Tareas",
-        data: tipoEntradas.length ? tipoEntradas.map(([, v]) => v) : [0],
-      },
-    ],
-  });
-
-  /* 5. Barras horizontales — carga del equipo */
-  const usuarios = Object.entries(m.tareasPorUsuario || {});
-  const mapaU = _cacheUsuarios || {};
-  const equipoData = usuarios
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 8)
-    .map(([uid, cant]) => ({
-      name: mapaU[uid]?.nombre || uid.slice(-6),
-      y: cant,
-    }));
-
-  Highcharts.chart("chartEquipo", {
-    ..._hcBase(),
-    chart: { ..._hcBase().chart, type: "bar" },
-    xAxis: { categories: equipoData.map((d) => d.name), ..._hcBase().xAxis },
-    yAxis: { ..._hcBase().yAxis, allowDecimals: false },
-    plotOptions: {
-      bar: {
-        borderRadius: 6,
-        borderWidth: 0,
-        colorByPoint: false,
-        pointPadding: 0.08,
-        groupPadding: 0.08,
-      },
-    },
-    colors: ["#6366f1"],
-    legend: { enabled: false },
-    series: [
-      {
-        name: "Tareas",
-        data: equipoData.length ? equipoData.map((d) => d.y) : [0],
-      },
-    ],
+    colors: tipoCategorias.map((k) => tipoColores[k] || "#6366f1"),
+    series: [{ name: "Tareas", data: tipoValores }],
   });
 }
 
@@ -460,14 +1129,14 @@ async function _cargarProyectosRecientes() {
   if (!cont) return;
   try {
     const ps = await api("GET", "/proyectos/");
-
-    // Botón nuevo proyecto junto al título
     const accionesProy = document.getElementById("dashAccionesProy");
     if (
       accionesProy &&
       (S.usuario.rol === "PROJECT_MANAGER" || S.usuario.rol === "ADMIN")
     ) {
-      accionesProy.innerHTML = `<button class="btn btn-primary btn-sm" onclick="abrirModal('mProy')"><i class="ph ph-plus"></i> Nuevo</button>`;
+      accionesProy.innerHTML =
+        `<button class="btn btn-primary btn-sm" onclick="abrirModal('mProy')">` +
+        `<i class="ph ph-plus"></i> Nuevo</button>`;
     }
 
     const iconoEstado = (e) =>
@@ -484,14 +1153,15 @@ async function _cargarProyectosRecientes() {
           .slice(0, 8)
           .map((p) => {
             const pct = Math.round(p.progreso || 0);
+            const nombreJs = String(p.nombre || "").replace(/'/g, "\\'");
             return `
           <div class="proy-row">
             <div class="proy-ico">
               <i class="ph ${iconoEstado(p.estado)}"></i>
             </div>
             <div class="proy-info">
-              <div class="proy-nombre">${p.nombre}</div>
-              <div class="proy-meta">${p.descripcion || "Sin descripción"} · fin ${fFecha(p.fechaFinEstimada)}</div>
+              <div class="proy-nombre">${_dashEsc(p.nombre)}</div>
+              <div class="proy-meta">${_dashEsc(p.descripcion || "Sin descripción")} · fin ${fFecha(p.fechaFinEstimada)}</div>
               <div class="proy-prog-wrap">
                 <div class="prog" style="flex:1;height:4px"><div class="prog-bar" style="width:${pct}%"></div></div>
                 <span class="proy-pct">${pct}%</span>
@@ -499,8 +1169,11 @@ async function _cargarProyectosRecientes() {
             </div>
             ${badgeEstado(p.estado)}
             <div class="flex" style="gap:5px">
-              <button class="btn btn-outline btn-xs" onclick="irTablero('${p.id}','${p.nombre}')">
+              <button class="btn btn-outline btn-xs" onclick="irTablero('${p.id}','${nombreJs}')">
                 <i class="ph ph-kanban"></i> Tablero
+              </button>
+              <button class="btn btn-outline btn-xs" onclick="abrirJerarquiaProyecto('${p.id}')">
+                <i class="ph ph-tree-structure"></i> Estructura
               </button>
               ${
                 S.usuario.rol !== "DEVELOPER"
@@ -519,7 +1192,7 @@ async function _cargarProyectosRecientes() {
           No tienes proyectos aún
          </div>`;
   } catch (e) {
-    cont.innerHTML = `<div class="vacío">Error: ${e.message}</div>`;
+    cont.innerHTML = `<div class="vacío">Error: ${_dashEsc(e.message)}</div>`;
   }
 }
 
@@ -803,68 +1476,249 @@ function _renderizarPaginacion(paginaActual, totalPaginas, onCambio) {
 /* Paginación para la vista de Tareas (tabla) */
 let _paginaTareas = 1;
 const _LIMITE_TAREAS = 20;
+let _estructuraTareasProyecto = null;
+let _subtareasEtapaProyecto = [];
+
+function _escTxt(valor = "") {
+  return String(valor)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function _poblarFiltrosEstructuraTareas(estructura) {
+  const selFase = document.getElementById("fTareaFase");
+  const selEtapa = document.getElementById("fTareaEtapa");
+  if (!selFase || !selEtapa) return;
+
+  const fases = Array.isArray(estructura?.fases) ? estructura.fases : [];
+  const faseActual = selFase.value || "";
+  const etapaActual = selEtapa.value || "";
+
+  selFase.innerHTML =
+    '<option value="">— Fase —</option>' +
+    fases
+      .map(
+        (fase) => `<option value="${fase.id}">${_escTxt(fase.nombre)}</option>`,
+      )
+      .join("");
+  selFase.value = fases.some((fase) => fase.id === faseActual)
+    ? faseActual
+    : "";
+
+  const etapas = selFase.value
+    ? estructura?.etapasPorFase?.[selFase.value] || []
+    : [];
+  selEtapa.innerHTML =
+    '<option value="">— Etapa —</option>' +
+    etapas
+      .map(
+        (etapa) =>
+          `<option value="${etapa.id}">${_escTxt(etapa.nombre)}</option>`,
+      )
+      .join("");
+  selEtapa.value = etapas.some((etapa) => etapa.id === etapaActual)
+    ? etapaActual
+    : "";
+}
+
+function _htmlContextoTarea(tarea) {
+  const { fase, etapa } = resolverContextoEstructura(
+    _estructuraTareasProyecto,
+    tarea.faseId,
+    tarea.etapaId,
+  );
+  const badges = [];
+  if (fase)
+    badges.push(`<span class="badge ba">${_escTxt(fase.nombre)}</span>`);
+  if (etapa)
+    badges.push(`<span class="badge bi">${_escTxt(etapa.nombre)}</span>`);
+  return badges.length
+    ? badges.join(" ")
+    : '<span class="txt3">Sin fase/etapa</span>';
+}
+
+function _htmlResponsablesIds(responsables = []) {
+  const resps = (responsables || [])
+    .map((id) => {
+      const m = miembrosActuales.find((miembro) => miembro.id === id);
+      return `<div class="avatar avatar-sm" title="${_escTxt(m?.nombre || id)}">${inic(m?.nombre || "?")}</div>`;
+    })
+    .join("");
+  return `<div class="avatar-group">${resps || '<span class="txt3">—</span>'}</div>`;
+}
+
+function _contextoDesdeSubtareaEtapa(subtarea) {
+  const { fase, etapa } = resolverContextoEstructura(
+    _estructuraTareasProyecto,
+    subtarea.faseId,
+    subtarea.etapaId,
+  );
+  const faseNombre = subtarea.faseNombre || fase?.nombre;
+  const etapaNombre = subtarea.etapaNombre || etapa?.nombre;
+  const badges = [];
+  if (faseNombre)
+    badges.push(`<span class="badge ba">${_escTxt(faseNombre)}</span>`);
+  if (etapaNombre)
+    badges.push(`<span class="badge bi">${_escTxt(etapaNombre)}</span>`);
+  return badges.length
+    ? badges.join(" ")
+    : '<span class="txt3">Sin fase/etapa</span>';
+}
+
+function _filtrarSubtareasEtapaProyecto(faseId, etapaId) {
+  return (_subtareasEtapaProyecto || []).filter((sub) => {
+    if (faseId && sub.faseId !== faseId) return false;
+    if (etapaId && sub.etapaId !== etapaId) return false;
+    return true;
+  });
+}
+
+function _renderFilasSubtareasEtapa(subtareasEtapa) {
+  if (!subtareasEtapa.length) return "";
+
+  const encabezado = `<tr><td colspan="7" class="txt3" style="font-size:11px;padding-top:14px">Subtareas de etapa (${subtareasEtapa.length})</td></tr>`;
+  const filas = subtareasEtapa
+    .map((s) => {
+      const estado = s.completada
+        ? '<span class="badge bg">Completada</span>'
+        : '<span class="badge ba">Pendiente</span>';
+      return `<tr>
+        <td style="color:var(--txt);font-weight:500">
+          <span class="txt3" style="font-size:11px">↳</span> ${_escTxt(s.titulo)}
+        </td>
+        <td><span class="badge bm">subtarea etapa</span></td>
+        <td><span class="txt3">—</span></td>
+        <td>${_contextoDesdeSubtareaEtapa(s)}</td>
+        <td>${_htmlResponsablesIds(s.responsables || [])}</td>
+        <td>${estado}</td>
+        <td>
+          <div class="flex" style="gap:4px">
+            <button class="btn btn-outline btn-xs" onclick="toggleSubtareaEtapaDesdeTareas('${s.id}')">
+              ${s.completada ? "Reabrir" : "Completar"}
+            </button>
+          </div>
+        </td>
+      </tr>`;
+    })
+    .join("");
+  return encabezado + filas;
+}
+
+async function toggleSubtareaEtapaDesdeTareas(subtareaId) {
+  try {
+    await api("POST", `/subtareas/${subtareaId}/toggle`);
+    await cargarTareasPaginadas(proyActualId, _paginaTareas || 1);
+    toast("Subtarea actualizada");
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
+
+async function onCambioFiltroFaseTareas() {
+  if (!_estructuraTareasProyecto) return;
+  _poblarFiltrosEstructuraTareas(_estructuraTareasProyecto);
+  if (proyActualId) await cargarTareasPaginadas(proyActualId, 1);
+}
+
+async function onCambioFiltroEtapaTareas() {
+  if (proyActualId) await cargarTareasPaginadas(proyActualId, 1);
+}
 
 async function cargarTareasPaginadas(proyId, pagina) {
-  if (!proyId) return;
+  if (!proyId) {
+    proyActualId = null;
+    _estructuraTareasProyecto = null;
+    _subtareasEtapaProyecto = [];
+    const tbVacio = document.getElementById("tbTareas");
+    const pagVacio = document.getElementById("pagTareas");
+    const selFase = document.getElementById("fTareaFase");
+    const selEtapa = document.getElementById("fTareaEtapa");
+    if (selFase) selFase.innerHTML = '<option value="">— Fase —</option>';
+    if (selEtapa) selEtapa.innerHTML = '<option value="">— Etapa —</option>';
+    if (tbVacio) {
+      tbVacio.innerHTML =
+        '<tr><td colspan="7" class="vacío">Selecciona un proyecto para ver las tareas</td></tr>';
+    }
+    if (pagVacio) pagVacio.innerHTML = "";
+    return;
+  }
   proyActualId = proyId;
   _paginaTareas = pagina || 1;
-
-  // Cargar columnas del tablero para el modal de nueva tarea
-  try {
-    const tableros = await api("GET", `/proyectos/${proyId}/tableros`);
-    colsActuales = tableros[0]?.columnas || [];
-  } catch (_) {
-    colsActuales = [];
-  }
-
-  try {
-    const todos = await api("GET", "/usuarios/activos");
-    miembrosActuales = todos
-      .filter((u) => u.rol === "DEVELOPER")
-      .map((u) => ({ id: u.id, nombre: u.nombre, email: u.email, rol: u.rol }));
-  } catch (_) {
-    miembrosActuales = [];
-  }
 
   const tb = document.getElementById("tbTareas");
   const pagEl = document.getElementById("pagTareas");
   if (tb)
     tb.innerHTML =
-      '<tr><td colspan="6" class="vacío"><span class="spinner"></span></td></tr>';
+      '<tr><td colspan="7" class="vacío"><span class="spinner"></span></td></tr>';
 
   try {
+    const [tableros, todos, estructura, subtareasEtapaProyecto] =
+      await Promise.all([
+        api("GET", `/proyectos/${proyId}/tableros`).catch(() => []),
+        api("GET", "/usuarios/activos").catch(() => []),
+        cargarEstructuraProyecto(proyId).catch(() => ({
+          fases: [],
+          fasesPorId: {},
+          etapasPorFase: {},
+          etapasPorId: {},
+        })),
+        api("GET", `/proyectos/${proyId}/subtareas-etapa`).catch(() => []),
+      ]);
+
+    colsActuales = tableros[0]?.columnas || [];
+    miembrosActuales = todos
+      .filter((u) => u.rol === "DEVELOPER")
+      .map((u) => ({ id: u.id, nombre: u.nombre, email: u.email, rol: u.rol }));
+    _estructuraTareasProyecto = estructura;
+    _subtareasEtapaProyecto = Array.isArray(subtareasEtapaProyecto)
+      ? subtareasEtapaProyecto
+      : [];
+    _poblarFiltrosEstructuraTareas(estructura);
+
+    const faseId = document.getElementById("fTareaFase")?.value || "";
+    const etapaId = document.getElementById("fTareaEtapa")?.value || "";
+    const subtareasEtapaFiltradas = _filtrarSubtareasEtapaProyecto(
+      faseId,
+      etapaId,
+    );
+    const params = new URLSearchParams({
+      pagina: String(_paginaTareas),
+      limite: String(_LIMITE_TAREAS),
+    });
+    if (faseId) params.set("fase_id", faseId);
+    if (etapaId) params.set("etapa_id", etapaId);
+
     const res = await api(
       "GET",
-      `/proyectos/${proyId}/tareas?pagina=${_paginaTareas}&limite=${_LIMITE_TAREAS}`,
+      `/proyectos/${proyId}/tareas?${params.toString()}`,
     );
     const ts = res.datos || res;
 
-    if (!ts.length) {
+    if (!ts.length && !subtareasEtapaFiltradas.length) {
       tb.innerHTML =
-        '<tr><td colspan="6" class="vacío">Sin tareas en este proyecto</td></tr>';
+        '<tr><td colspan="7" class="vacío">Sin tareas ni subtareas de etapa para el filtro seleccionado</td></tr>';
       if (pagEl) pagEl.innerHTML = "";
       return;
     }
 
-    tb.innerHTML = ts
+    const filasTareas = ts
       .map((t) => {
-        const resps = (t.responsables || [])
-          .map((id) => {
-            const m = miembrosActuales.find((m) => m.id === id);
-            return `<div class="avatar avatar-sm" title="${m?.nombre || id}">${inic(m?.nombre || "?")}</div>`;
-          })
-          .join("");
         return `<tr>
         <td style="color:var(--txt);font-weight:500;cursor:pointer" onclick="abrirPanelComentarios('${t.id}','${t.titulo.replace(/'/g, "\\'")}')">
           ${t.titulo}
         </td>
         <td>${badgeTipo(t.tipo)}</td>
         <td>${badgePrio(t.prioridad)}</td>
-        <td><div class="avatar-group">${resps || '<span class="txt3">—</span>'}</div></td>
+        <td>${_htmlContextoTarea(t)}</td>
+        <td>${_htmlResponsablesIds(t.responsables || [])}</td>
         <td>${t.estaVencida ? '<span class="badge br">Vencida</span>' : '<span class="badge bg">Activa</span>'}</td>
         <td><div class="flex" style="gap:4px">
           <button class="btn btn-outline btn-xs" onclick="abrirPanelComentarios('${t.id}','${t.titulo.replace(/'/g, "\\'")}')">💬</button>
-          <button class="btn btn-outline btn-xs" onclick="abrirPanelSubtareas('${t.id}','${t.titulo.replace(/'/g, "\\'")}')">📋</button>
+          <button class="btn btn-outline btn-xs" title="Subtareas y jerarquía (Builder + Composite)" onclick="abrirPanelSubtareas('${t.id}','${t.titulo.replace(/'/g, "\\'")}')"><i class="ph ph-tree-structure"></i></button>
+          <button class="btn btn-outline btn-xs" onclick="abrirEditarTarea('${t.id}')"><i class="ph ph-pencil-simple"></i></button>
           <button class="btn btn-outline btn-xs" onclick="abrirAsignar('${t.id}')">Asignar</button>
           <button class="btn btn-outline btn-xs" onclick="clonarTarea('${t.id}')">Clonar</button>
           <button class="btn btn-red btn-xs" onclick="eliminarTarea('${t.id}')">✕</button>
@@ -872,6 +1726,10 @@ async function cargarTareasPaginadas(proyId, pagina) {
       </tr>`;
       })
       .join("");
+    const filasSubtareasEtapa = _renderFilasSubtareasEtapa(
+      subtareasEtapaFiltradas,
+    );
+    tb.innerHTML = filasTareas + filasSubtareasEtapa;
 
     // Paginación de tareas
     if (pagEl && res.totalPaginas > 1) {
@@ -885,6 +1743,6 @@ async function cargarTareasPaginadas(proyId, pagina) {
     }
   } catch (e) {
     if (tb)
-      tb.innerHTML = `<tr><td colspan="6" class="vacío">Error: ${e.message}</td></tr>`;
+      tb.innerHTML = `<tr><td colspan="7" class="vacío">Error: ${e.message}</td></tr>`;
   }
 }

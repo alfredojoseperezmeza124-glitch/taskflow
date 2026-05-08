@@ -229,181 +229,285 @@ def _formatear_fecha(valor: Any) -> str:
     return str(valor)
 
 
-def _crear_pdf_reporte_estilizado(reporte: dict[str, Any]) -> bytes:
+"""
+MEJORA: _crear_pdf_reporte_estilizado
+Reemplazar la función en backend/app/patterns/bridge/puente_exportacion.py
+PDF con diseño profesional: portada, paleta de colores corporativa TaskFlow,
+tipografía limpia y tarjetas de datos bien estructuradas.
+"""
+
+def _crear_pdf_reporte_estilizado(reporte: dict) -> bytes:
     """
-    Genera un PDF con encabezado visual y secciones legibles sin librerías externas.
+    Genera un PDF de alta calidad con:
+    - Portada con degradado corporativo y logo textual
+    - Sección de resumen con indicadores visuales
+    - Tabla de datos con zebra striping
+    - Footer con numeración de página
     """
-    def _escape_pdf(s: str) -> str:
-        return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    from io import BytesIO
 
-    def _items_detalle() -> list[dict[str, Any]]:
-        items: list[dict[str, Any]] = []
-        for idx, fila in enumerate(reporte.get("filas", []), start=1):
-            if idx > 28:
-                break
-            items.append(
-                {
-                    "numero": idx,
-                    "id": fila.get("id") or "-",
-                    "titulo": fila.get("titulo") or "-",
-                    "tipo": fila.get("tipo") or "-",
-                    "prioridad": fila.get("prioridad") or "-",
-                    "columnaId": fila.get("columnaId") or "-",
-                    "responsables": fila.get("responsables") or "-",
-                    "vencimiento": fila.get("vencimiento") or "-",
-                }
-            )
-        return items
+    # ── Colores corporativos TaskFlow ──────────────────────────────────────
+    # Azul oscuro: 0.08 0.17 0.33 (rgb 20 44 85)
+    # Azul medio: 0.10 0.31 0.54 (rgb 26 79 138)
+    # Acento violeta: 0.42 0.39 1.0 (rgb 108 99 255)
+    # Verde: 0.24 0.81 0.56 (rgb 62 207 142)
+    # Rojo: 0.97 0.27 0.27 (rgb 248 68 68)
+    # Ámbar: 0.96 0.73 0.14 (rgb 245 188 36)
+    # Texto oscuro: 0.09 0.09 0.10
+    # Texto claro: 0.62 0.62 0.66
+    # Fondo: 0.97 0.97 0.98
 
-    titulo = str(reporte.get("titulo", "Reporte"))
-    proyecto = str(reporte.get("proyectoNombre", ""))
-    generado = str(reporte.get("generadoEn", ""))
-    resumen = reporte.get("resumen") or {}
-    resumen_lineas = [f"- {k}: {v}" for k, v in resumen.items()] or ["- Sin metricas disponibles"]
-    detalle_items = _items_detalle()
+    def esc(s: str) -> str:
+        return str(s).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)").replace("\n", " ")
 
-    comandos: list[str] = []
-    # Fondo encabezado
-    comandos.extend(
-        [
+    def color_prioridad(prio: str) -> tuple:
+        """Devuelve (r, g, b) según prioridad."""
+        m = {
+            "URGENTE": (0.97, 0.27, 0.27),
+            "ALTA":    (0.96, 0.45, 0.18),
+            "MEDIA":   (0.96, 0.73, 0.14),
+            "BAJA":    (0.24, 0.81, 0.56),
+        }
+        return m.get(str(prio).upper(), (0.62, 0.62, 0.66))
+
+    def color_tipo(tipo: str) -> tuple:
+        m = {
+            "BUG":         (0.97, 0.27, 0.27),
+            "FEATURE":     (0.37, 0.65, 0.98),
+            "TASK":        (0.62, 0.62, 0.66),
+            "IMPROVEMENT": (0.24, 0.81, 0.56),
+        }
+        return m.get(str(tipo).upper(), (0.62, 0.62, 0.66))
+
+    titulo      = str(reporte.get("titulo", "Reporte TaskFlow"))
+    proyecto    = str(reporte.get("proyectoNombre", ""))
+    generado    = str(reporte.get("generadoEn", ""))[:19].replace("T", " ")
+    tipo_rep    = str(reporte.get("tipoReporte", "reporte"))
+    resumen     = reporte.get("resumen") or {}
+    filas       = reporte.get("filas", [])
+
+    # Tipo legible
+    tipo_labels = {
+        "reporte_tareas":    "Reporte de Tareas",
+        "reporte_auditoria": "Auditoría del Proyecto",
+        "reporte_equipo":    "Métricas del Equipo",
+    }
+    tipo_str = tipo_labels.get(tipo_rep, tipo_rep.replace("_", " ").title())
+
+    cmds: list[str] = []
+
+    # ── PORTADA / HEADER ─────────────────────────────────────────────────
+    # Fondo completo de página
+    cmds += ["q", "0.97 0.97 0.98 rg", "0 0 595 842 re f", "Q"]
+
+    # Banda superior con degradado simulado (bloques de color)
+    for i, alpha in enumerate([1.0, 0.92, 0.85, 0.78, 0.70, 0.62, 0.54, 0.46, 0.38, 0.30]):
+        y = 750 + i * 9.2
+        h = 9.5
+        # Mezcla de azul oscuro y violeta
+        r = 0.08 + i * 0.034
+        g = 0.17 + i * 0.022
+        b = 0.33 + i * 0.067
+        cmds += ["q", f"{r:.3f} {g:.3f} {b:.3f} rg", f"0 {y:.1f} 595 {h:.1f} re f", "Q"]
+
+    # Banda sólida superior
+    cmds += ["q", "0.08 0.17 0.33 rg", "0 800 595 42 re f", "Q"]
+
+    # Línea de acento violeta
+    cmds += ["q", "0.42 0.39 1.0 rg", "0 798 595 3 re f", "Q"]
+
+    # Logo textual en banda
+    cmds += [
+        "BT", "/F2 15 Tf", "1 1 1 rg",
+        "38 817 Td", f"(TaskFlow) Tj", "ET",
+    ]
+    # Subtítulo tipo en banda
+    cmds += [
+        "BT", "/F1 8 Tf", "0.62 0.72 0.90 rg",
+        "38 808 Td", f"({esc(tipo_str)}) Tj", "ET",
+    ]
+    # Fecha en banda (derecha)
+    cmds += [
+        "BT", "/F1 7 Tf", "0.62 0.72 0.90 rg",
+        "430 817 Td", f"(Generado: {esc(generado)}) Tj", "ET",
+    ]
+
+    # ── TÍTULO PRINCIPAL ─────────────────────────────────────────────────
+    titulo_short = titulo[:68] if len(titulo) > 68 else titulo
+    cmds += [
+        "BT", "/F2 16 Tf", "0.08 0.17 0.33 rg",
+        "38 756 Td", f"({esc(titulo_short)}) Tj", "ET",
+    ]
+    if proyecto:
+        cmds += [
+            "BT", "/F1 9 Tf", "0.42 0.42 0.50 rg",
+            "38 742 Td", f"(Proyecto: {esc(proyecto)}) Tj", "ET",
+        ]
+
+    # Línea divisoria
+    cmds += ["q", "0.88 0.88 0.92 RG", "0.5 w",
+             "38 735 m", "557 735 l", "S", "Q"]
+
+    # ── RESUMEN ───────────────────────────────────────────────────────────
+    y = 718
+    cmds += [
+        "BT", "/F2 9 Tf", "0.42 0.42 0.50 rg",
+        f"38 {y} Td", "(RESUMEN EJECUTIVO) Tj", "ET",
+    ]
+    y -= 12
+
+    resumen_items = list(resumen.items())
+    # Dibuja los KPI como "chips" en fila
+    chip_x = 38
+    chip_y = y
+    chip_h = 40
+    chip_gap = 8
+    chip_w = min(120, max(80, (519 - chip_gap * (len(resumen_items) - 1)) // max(1, len(resumen_items))))
+
+    # Colores para chips de KPI
+    kpi_colors = [
+        (0.42, 0.39, 1.0),   # violeta
+        (0.24, 0.81, 0.56),  # verde
+        (0.96, 0.73, 0.14),  # ámbar
+        (0.37, 0.65, 0.98),  # azul
+        (0.97, 0.27, 0.27),  # rojo
+    ]
+    for idx, (k, v) in enumerate(resumen_items[:5]):
+        cx = chip_x + idx * (chip_w + chip_gap)
+        cr, cg, cb = kpi_colors[idx % len(kpi_colors)]
+        # Fondo del chip
+        cmds += [
             "q",
-            "0.12 0.10 0.30 rg",
-            "0 770 595 72 re f",
+            f"{cr:.3f} {cg:.3f} {cb:.3f} rg",
+            f"{cx} {chip_y} {chip_w} {chip_h} re f",
             "Q",
         ]
-    )
-    # Línea decorativa
-    comandos.extend(
-        [
+        # Franja inferior más oscura
+        cmds += [
             "q",
-            "0.42 0.38 0.96 RG",
-            "2 w",
-            "40 765 m",
-            "555 765 l",
-            "S",
+            f"{cr*0.7:.3f} {cg*0.7:.3f} {cb*0.7:.3f} rg",
+            f"{cx} {chip_y} {chip_w} 5 re f",
             "Q",
         ]
-    )
+        # Valor
+        val_str = str(v)[:8]
+        cmds += [
+            "BT", "/F2 13 Tf", "1 1 1 rg",
+            f"{cx+8} {chip_y+22} Td", f"({esc(val_str)}) Tj", "ET",
+        ]
+        # Label
+        label_str = str(k)[:16]
+        cmds += [
+            "BT", "/F1 7 Tf", "0.90 0.90 0.95 rg",
+            f"{cx+8} {chip_y+10} Td", f"({esc(label_str)}) Tj", "ET",
+        ]
 
-    y = 812
-    comandos.append("BT")
-    comandos.append("/F2 18 Tf")
-    comandos.append("1 1 1 rg")
-    comandos.append(f"40 {y} Td")
-    comandos.append(f"({_escape_pdf(titulo[:72])}) Tj")
-    comandos.append("ET")
+    y = chip_y - 18
 
-    meta = f"Proyecto: {proyecto}   |   Generado: {generado}"
-    comandos.append("BT")
-    comandos.append("/F1 9 Tf")
-    comandos.append("0.88 0.88 1 rg")
-    comandos.append("40 792 Td")
-    comandos.append(f"({_escape_pdf(meta[:120])}) Tj")
-    comandos.append("ET")
+    # Línea divisoria
+    cmds += ["q", "0.88 0.88 0.92 RG", "0.5 w",
+             "38 " + str(y + 4) + " m", "557 " + str(y + 4) + " l", "S", "Q"]
+    y -= 8
 
-    # Resumen
-    y = 742
-    comandos.append("BT")
-    comandos.append("/F2 12 Tf")
-    comandos.append("0.16 0.18 0.35 rg")
-    comandos.append(f"40 {y} Td")
-    comandos.append("(Resumen ejecutivo) Tj")
-    comandos.append("ET")
-    y -= 18
+    # ── SECCIÓN DETALLE ──────────────────────────────────────────────────
+    cmds += [
+        "BT", "/F2 9 Tf", "0.42 0.42 0.50 rg",
+        f"38 {y} Td", "(DETALLE DE REGISTROS) Tj", "ET",
+    ]
+    y -= 14
 
-    for linea in resumen_lineas:
-        if y < 80:
-            break
-        for sub in _envolver_texto(linea, 95):
-            if y < 80:
-                break
-            comandos.append("BT")
-            comandos.append("/F1 10 Tf")
-            comandos.append("0.12 0.12 0.12 rg")
-            comandos.append(f"48 {y} Td")
-            comandos.append(f"({_escape_pdf(sub)}) Tj")
-            comandos.append("ET")
-            y -= 13
-
-    y -= 10
-    if y > 90:
-        comandos.append("BT")
-        comandos.append("/F2 12 Tf")
-        comandos.append("0.16 0.18 0.35 rg")
-        comandos.append(f"40 {y} Td")
-        comandos.append("(Detalle) Tj")
-        comandos.append("ET")
-        y -= 16
-
-    if not detalle_items:
-        comandos.append("BT")
-        comandos.append("/F1 9 Tf")
-        comandos.append("0.25 0.25 0.25 rg")
-        comandos.append(f"48 {y} Td")
-        comandos.append("(Sin registros para mostrar.) Tj")
-        comandos.append("ET")
+    if not filas:
+        cmds += [
+            "BT", "/F1 9 Tf", "0.62 0.62 0.66 rg",
+            f"38 {y} Td", "(Sin registros disponibles para este reporte.) Tj", "ET",
+        ]
     else:
-        for item in detalle_items:
-            if y < 120:
+        # Cabecera de tabla
+        headers = list(filas[0].keys()) if filas else []
+        # Calcular anchos de columna
+        n_cols = len(headers)
+        table_w = 519
+        col_w = table_w // max(1, n_cols)
+
+        # Header row
+        cmds += [
+            "q", "0.08 0.17 0.33 rg",
+            f"38 {y-3} {table_w} 16 re f", "Q",
+        ]
+        for ci, h in enumerate(headers[:8]):
+            hx = 38 + ci * col_w
+            cmds += [
+                "BT", "/F2 7 Tf", "0.85 0.90 0.98 rg",
+                f"{hx+4} {y+1} Td", f"({esc(str(h)[:14])}) Tj", "ET",
+            ]
+        y -= 18
+
+        # Filas de datos
+        for ri, fila in enumerate(filas[:26]):
+            if y < 60:
                 break
-            # tarjeta del ítem
-            alto = 90
-            top = y + 8
-            bottom = top - alto
-            comandos.extend(
-                [
-                    "q",
-                    "0.97 0.97 1 rg",
-                    f"40 {bottom} 515 {alto} re f",
-                    "0.86 0.86 0.95 RG",
-                    "0.7 w",
-                    f"40 {bottom} 515 {alto} re S",
-                    "Q",
+            # Zebra
+            if ri % 2 == 0:
+                cmds += [
+                    "q", "0.94 0.94 0.96 rg",
+                    f"38 {y-3} {table_w} 14 re f", "Q",
                 ]
-            )
-            # título del bloque
-            comandos.append("BT")
-            comandos.append("/F2 10 Tf")
-            comandos.append("0.16 0.18 0.35 rg")
-            comandos.append(f"48 {top - 16} Td")
-            comandos.append(f"(Item {item['numero']} - { _escape_pdf(str(item['titulo'])[:58]) }) Tj")
-            comandos.append("ET")
 
-            linea1 = f"ID: {item['id']}    Tipo: {item['tipo']}    Prioridad: {item['prioridad']}"
-            linea2 = f"Columna: {item['columnaId']}"
-            linea3 = f"Responsables: {item['responsables']}"
-            linea4 = f"Vencimiento: {item['vencimiento']}"
+            vals = list(fila.values())
+            for ci, val in enumerate(vals[:8]):
+                vx = 38 + ci * col_w
+                val_str = str(val or "")[:18]
+                # Color especial para prioridad
+                col_key = str(headers[ci]).lower() if ci < len(headers) else ""
+                if "prioridad" in col_key or "priority" in col_key:
+                    r2, g2, b2 = color_prioridad(val_str)
+                    cmds += [
+                        "q",
+                        f"{r2:.3f} {g2:.3f} {b2:.3f} rg",
+                        f"{vx+3} {y-1} {min(col_w-6, len(val_str)*5+8)} 11 re f",
+                        "Q",
+                        "BT", "/F2 6.5 Tf", "1 1 1 rg",
+                        f"{vx+6} {y+1} Td", f"({esc(val_str)}) Tj", "ET",
+                    ]
+                elif "tipo" in col_key or "type" in col_key:
+                    r2, g2, b2 = color_tipo(val_str)
+                    cmds += [
+                        "q",
+                        f"{r2:.3f} {g2:.3f} {b2:.3f} rg",
+                        f"{vx+3} {y-1} {min(col_w-6, len(val_str)*5+8)} 11 re f",
+                        "Q",
+                        "BT", "/F2 6.5 Tf", "1 1 1 rg",
+                        f"{vx+6} {y+1} Td", f"({esc(val_str)}) Tj", "ET",
+                    ]
+                else:
+                    cmds += [
+                        "BT", "/F1 7.5 Tf", "0.15 0.15 0.18 rg",
+                        f"{vx+4} {y+1} Td", f"({esc(val_str)}) Tj", "ET",
+                    ]
+            y -= 14
 
-            yy = top - 32
-            for linea in [linea1, linea2, linea3, linea4]:
-                for sub in _envolver_texto(str(linea), 96):
-                    comandos.append("BT")
-                    comandos.append("/F1 8.8 Tf")
-                    comandos.append("0.16 0.16 0.16 rg")
-                    comandos.append(f"50 {yy} Td")
-                    comandos.append(f"({_escape_pdf(sub)}) Tj")
-                    comandos.append("ET")
-                    yy -= 10
+        if len(filas) > 26 and y > 50:
+            resto = len(filas) - 26
+            cmds += [
+                "BT", "/F1 7 Tf", "0.62 0.62 0.66 rg",
+                f"38 {y-4} Td", f"(... y {resto} registro(s) adicional(es) omitidos para mantener legibilidad.) Tj",
+                "ET",
+            ]
 
-            y = bottom - 10
+    # ── FOOTER ───────────────────────────────────────────────────────────
+    cmds += [
+        "q", "0.08 0.17 0.33 rg", "0 0 595 28 re f", "Q",
+        "q", "0.42 0.39 1.0 rg", "0 28 595 2 re f", "Q",
+        "BT", "/F1 7 Tf", "0.62 0.72 0.90 rg",
+        "38 10 Td", "(TaskFlow — Documento generado automaticamente. No requiere firma.) Tj",
+        "ET",
+        "BT", "/F1 7 Tf", "0.62 0.72 0.90 rg",
+        "510 10 Td", "(Pag. 1) Tj",
+        "ET",
+    ]
 
-        if len(reporte.get("filas", [])) > len(detalle_items) and y > 40:
-            comandos.append("BT")
-            comandos.append("/F1 8 Tf")
-            comandos.append("0.45 0.45 0.55 rg")
-            comandos.append(f"40 {max(y, 36)} Td")
-            comandos.append("(Detalle truncado para mantener una presentacion limpia del reporte.) Tj")
-            comandos.append("ET")
-
-    # Pie de página
-    comandos.append("BT")
-    comandos.append("/F1 8 Tf")
-    comandos.append("0.45 0.45 0.55 rg")
-    comandos.append("40 24 Td")
-    comandos.append("(TaskFlow - Reporte generado automaticamente) Tj")
-    comandos.append("ET")
-
-    stream = "\n".join(comandos).encode("latin-1", errors="replace")
+    # ── ENSAMBLAR PDF ────────────────────────────────────────────────────
+    stream = "\n".join(cmds).encode("latin-1", errors="replace")
 
     objects: list[bytes] = []
     objects.append(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")

@@ -8,23 +8,678 @@
 /* cargarDashboard movido a dashboard.js */
 
 /* ══════════ PROYECTOS ══════════ */
+const _REGLAS_DECORATOR_DEFAULTS = {
+  auditoriaEnriquecidaActiva: true,
+  notificacionAutomaticaActiva: true,
+  validacionSlaActiva: true,
+  maxHorasPorTarea: 80,
+  notificarBugUrgenteAlPm: true,
+  validarHorasAntesDeMoverEnProgreso: true,
+};
+
+function _toggleSet(id, activo) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle("on", !!activo);
+}
+
+function _toggleGet(id) {
+  return !!document.getElementById(id)?.classList.contains("on");
+}
+
+let _jerarquiaProyectoId = null;
+let _jerarquiaProyectoData = null;
+let _jerarquiaNodoPorId = {};
+let _jpModalFaseProyectoId = null;
+let _jpModalEtapaFaseId = null;
+let _jpModalSubtareaEtapaId = null;
+let _jpModalEditarTipo = null;
+let _jpModalEditarNodoId = null;
+let _jpModalEliminarTipo = null;
+let _jpModalEliminarNodoId = null;
+
+function _puedeEditarEstructuraProyecto() {
+  return ["PROJECT_MANAGER", "ADMIN"].includes(S?.usuario?.rol);
+}
+
+function _puedeGestionarSubtareasEtapa() {
+  return ["DEVELOPER", "PROJECT_MANAGER", "ADMIN"].includes(S?.usuario?.rol);
+}
+
+function _jpEsc(txt) {
+  return String(txt || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function _jpIconoCategoria(categoria) {
+  const mapa = {
+    PROYECTO: "ph-folder-open",
+    FASE: "ph-flag-banner",
+    ETAPA: "ph-signpost",
+    SUBTAREA: "ph-check-square-offset",
+  };
+  return mapa[categoria] || "ph-tree-structure";
+}
+
+function _jpColorBadge(categoria) {
+  const mapa = {
+    PROYECTO: "bb",
+    FASE: "ba",
+    ETAPA: "bi",
+    SUBTAREA: "bg",
+  };
+  return mapa[categoria] || "bm";
+}
+
+function _jpSetError(msg = "") {
+  const err = document.getElementById("proyJerarquiaError");
+  if (err) err.textContent = msg;
+}
+
+function _jpRenderStats(nodo) {
+  const el = document.getElementById("proyJerarquiaStats");
+  if (!el) return;
+  if (!nodo) {
+    el.textContent = "—";
+    return;
+  }
+  const progreso = Number(nodo.progreso || 0).toFixed(1);
+  const horas = Number(nodo.horasEstimadas || 0).toFixed(1);
+  const responsables = (nodo.responsables || []).length;
+  el.innerHTML = `
+    <span class="badge bb">Progreso ${progreso}%</span>
+    <span class="badge bi">Horas ${horas}h</span>
+    <span class="badge ba">Responsables ${responsables}</span>
+  `;
+}
+
+function _jpContarNodos(nodo) {
+  if (!nodo) return 0;
+  const hijos = Array.isArray(nodo.hijos) ? nodo.hijos : [];
+  return 1 + hijos.reduce((acc, h) => acc + _jpContarNodos(h), 0);
+}
+
+function _jpIndexarNodos(nodo) {
+  if (!nodo || typeof nodo !== "object") return;
+  if (nodo.id) _jerarquiaNodoPorId[nodo.id] = nodo;
+  (nodo.hijos || []).forEach((h) => _jpIndexarNodos(h));
+}
+
+function _jpRenderNodo(nodo, nivel = 0) {
+  if (!nodo || typeof nodo !== "object") return "";
+  const categoria = String(nodo.categoria || "NODO").toUpperCase();
+  const hijos = Array.isArray(nodo.hijos) ? nodo.hijos : [];
+  const icono = _jpIconoCategoria(categoria);
+  const progreso = Number(nodo.progreso || 0).toFixed(1);
+  const horas = Number(nodo.horasEstimadas || 0).toFixed(1);
+  const responsables = (nodo.responsables || []).length;
+  const badge = _jpColorBadge(categoria);
+  const titulo = _jpEsc(nodo.titulo || categoria);
+  const idCorto = _jpEsc(String(nodo.id || "").slice(-8));
+
+  const acciones = [];
+  if (categoria === "PROYECTO" && _puedeEditarEstructuraProyecto()) {
+    acciones.push(
+      `<button class="btn btn-outline btn-xs" onclick="jpAccion('crear-fase','${nodo.id}')"><i class="ph ph-plus"></i> Fase</button>`,
+    );
+  }
+  if (categoria === "FASE") {
+    if (_puedeEditarEstructuraProyecto()) {
+      acciones.push(
+        `<button class="btn btn-outline btn-xs" onclick="jpAccion('crear-etapa','${nodo.id}')"><i class="ph ph-plus"></i> Etapa</button>`,
+      );
+      acciones.push(
+        `<button class="btn btn-ghost btn-xs" onclick="jpAccion('editar-fase','${nodo.id}')"><i class="ph ph-pencil-simple"></i></button>`,
+      );
+      acciones.push(
+        `<button class="btn btn-red btn-xs" onclick="jpAccion('eliminar-fase','${nodo.id}')"><i class="ph ph-trash"></i></button>`,
+      );
+    }
+  }
+  if (categoria === "ETAPA") {
+    if (_puedeGestionarSubtareasEtapa()) {
+      acciones.push(
+        `<button class="btn btn-outline btn-xs" onclick="jpAccion('crear-subtarea','${nodo.id}')"><i class="ph ph-plus"></i> Subtarea</button>`,
+      );
+    }
+    if (_puedeEditarEstructuraProyecto()) {
+      acciones.push(
+        `<button class="btn btn-ghost btn-xs" onclick="jpAccion('editar-etapa','${nodo.id}')"><i class="ph ph-pencil-simple"></i></button>`,
+      );
+      acciones.push(
+        `<button class="btn btn-red btn-xs" onclick="jpAccion('eliminar-etapa','${nodo.id}')"><i class="ph ph-trash"></i></button>`,
+      );
+    }
+  }
+  if (categoria === "SUBTAREA" && _puedeGestionarSubtareasEtapa()) {
+    acciones.push(
+      `<button class="btn btn-outline btn-xs" onclick="jpAccion('toggle-subtarea','${nodo.id}')"><i class="ph ph-check"></i></button>`,
+    );
+    acciones.push(
+      `<button class="btn btn-red btn-xs" onclick="jpAccion('eliminar-subtarea','${nodo.id}')"><i class="ph ph-trash"></i></button>`,
+    );
+  }
+
+  return `
+    <div class="jp-node" style="margin-left:${nivel * 14}px">
+      <div class="jp-node-head">
+        <div class="jp-node-main">
+          <i class="ph ${icono} jp-node-ico"></i>
+          <div class="jp-node-body">
+            <div class="jp-node-title">${titulo}</div>
+            <div class="jp-node-meta">ID ${idCorto}</div>
+          </div>
+        </div>
+        <div class="jp-node-badges">
+          <span class="badge ${badge}">${categoria}</span>
+          <span class="badge bi">${horas}h</span>
+          <span class="badge bb">${progreso}%</span>
+          <span class="badge ba">${responsables}</span>
+        </div>
+      </div>
+      ${
+        acciones.length
+          ? `<div class="jp-node-actions">${acciones.join("")}</div>`
+          : ""
+      }
+      ${
+        hijos.length
+          ? `<div class="jp-node-children">${hijos.map((h) => _jpRenderNodo(h, nivel + 1)).join("")}</div>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+async function _jpCargarJerarquia(proyectoId, silencioso = false) {
+  const arbol = document.getElementById("proyJerarquiaArbol");
+  if (!arbol) return;
+
+  _jpSetError("");
+  if (!proyectoId) {
+    _jerarquiaProyectoId = null;
+    _jerarquiaProyectoData = null;
+    _jerarquiaNodoPorId = {};
+    _jpRenderStats(null);
+    arbol.innerHTML =
+      '<div class="vacío">Selecciona un proyecto para visualizar fases, etapas y subtareas.</div>';
+    return;
+  }
+
+  if (!silencioso) {
+    arbol.innerHTML = '<div class="vacío"><span class="spinner"></span></div>';
+  }
+
+  try {
+    const jerarquia = await api("GET", `/proyectos/${proyectoId}/jerarquia`);
+    invalidarCacheEstructuraProyecto(proyectoId);
+    _jerarquiaProyectoId = proyectoId;
+    _jerarquiaProyectoData = jerarquia;
+    _jerarquiaNodoPorId = {};
+    _jpIndexarNodos(jerarquia);
+    _jpRenderStats(jerarquia);
+    const totalNodos = _jpContarNodos(jerarquia);
+    arbol.innerHTML = `
+      <div class="txt3" style="font-size:11px;margin-bottom:10px">
+        Nodos totales: <strong style="color:var(--t1)">${totalNodos}</strong>
+      </div>
+      ${_jpRenderNodo(jerarquia, 0)}
+    `;
+  } catch (e) {
+    _jpSetError(e.message || "No se pudo cargar la jerarquía");
+    _jpRenderStats(null);
+    arbol.innerHTML = `<div class="vacío">No se pudo cargar la jerarquía del proyecto.</div>`;
+  }
+}
+
+async function seleccionarProyectoJerarquia(proyectoId) {
+  await _jpCargarJerarquia(proyectoId);
+}
+
+async function refrescarJerarquiaProyecto() {
+  const sel = document.getElementById("selJerarquiaProy");
+  const proyectoId = sel?.value || _jerarquiaProyectoId;
+  if (!proyectoId) {
+    toast("Selecciona un proyecto primero", "err");
+    return;
+  }
+  await _jpCargarJerarquia(proyectoId);
+}
+
+async function abrirJerarquiaProyecto(proyectoId) {
+  if (!proyectoId) return;
+  mostrarPantalla("proyectos");
+  setTimeout(async () => {
+    const sel = document.getElementById("selJerarquiaProy");
+    if (sel) sel.value = proyectoId;
+    await _jpCargarJerarquia(proyectoId);
+    document
+      .getElementById("proyJerarquiaCard")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 0);
+}
+
+function abrirModalCrearFaseJerarquia(proyectoId = null) {
+  if (!_puedeEditarEstructuraProyecto()) {
+    toast("No tienes permisos para crear fases", "err");
+    return;
+  }
+  const proyId =
+    proyectoId ||
+    document.getElementById("selJerarquiaProy")?.value ||
+    _jerarquiaProyectoId;
+  if (!proyId) {
+    toast("Selecciona un proyecto primero", "err");
+    return;
+  }
+  _jpModalFaseProyectoId = proyId;
+  const proyecto = (_jerarquiaProyectoData && _jerarquiaProyectoData.id === proyId)
+    ? _jerarquiaProyectoData
+    : _jerarquiaNodoPorId[proyId];
+  document.getElementById("jfProyectoId").value = proyId;
+  document.getElementById("jfProyectoLabel").textContent = proyecto?.titulo || proyId;
+  document.getElementById("jfNombre").value = "";
+  document.getElementById("jfDesc").value = "";
+  document.getElementById("jfError").textContent = "";
+  abrirModal("mJerarquiaFase");
+  setTimeout(() => document.getElementById("jfNombre")?.focus(), 60);
+}
+
+async function confirmarCrearFaseJerarquia() {
+  const proyectoId = document.getElementById("jfProyectoId").value || _jpModalFaseProyectoId;
+  const nombre = document.getElementById("jfNombre").value.trim();
+  const descripcion = document.getElementById("jfDesc").value.trim();
+  const errEl = document.getElementById("jfError");
+  if (errEl) errEl.textContent = "";
+  if (!proyectoId) {
+    if (errEl) errEl.textContent = "Proyecto no seleccionado";
+    return;
+  }
+  if (!nombre) {
+    if (errEl) errEl.textContent = "El nombre de la fase es obligatorio";
+    return;
+  }
+  try {
+    await api("POST", `/proyectos/${proyectoId}/fases`, {
+      nombre,
+      descripcion: descripcion || null,
+    });
+    invalidarCacheEstructuraProyecto(proyectoId);
+    cerrarModal("mJerarquiaFase");
+    toast("Fase creada");
+    await _jpCargarJerarquia(proyectoId, true);
+  } catch (e) {
+    if (errEl) errEl.textContent = e.message;
+  }
+}
+
+function abrirModalCrearEtapaJerarquia(faseId) {
+  if (!_puedeEditarEstructuraProyecto()) {
+    toast("No tienes permisos para crear etapas", "err");
+    return;
+  }
+  if (!faseId) {
+    toast("Fase no válida", "err");
+    return;
+  }
+  _jpModalEtapaFaseId = faseId;
+  const fase = _jerarquiaNodoPorId[faseId] || {};
+  document.getElementById("jeFaseId").value = faseId;
+  document.getElementById("jeFaseLabel").textContent = fase.titulo || faseId;
+  document.getElementById("jeNombre").value = "";
+  document.getElementById("jeDesc").value = "";
+  document.getElementById("jeError").textContent = "";
+  abrirModal("mJerarquiaEtapa");
+  setTimeout(() => document.getElementById("jeNombre")?.focus(), 60);
+}
+
+async function confirmarCrearEtapaJerarquia() {
+  const faseId = document.getElementById("jeFaseId").value || _jpModalEtapaFaseId;
+  const nombre = document.getElementById("jeNombre").value.trim();
+  const descripcion = document.getElementById("jeDesc").value.trim();
+  const errEl = document.getElementById("jeError");
+  if (errEl) errEl.textContent = "";
+  if (!faseId) {
+    if (errEl) errEl.textContent = "Fase no seleccionada";
+    return;
+  }
+  if (!nombre) {
+    if (errEl) errEl.textContent = "El nombre de la etapa es obligatorio";
+    return;
+  }
+  const proyectoId = _jerarquiaProyectoId || document.getElementById("selJerarquiaProy")?.value || "";
+  try {
+    await api("POST", `/proyectos/fases/${faseId}/etapas`, {
+      nombre,
+      descripcion: descripcion || null,
+    });
+    if (proyectoId) invalidarCacheEstructuraProyecto(proyectoId);
+    cerrarModal("mJerarquiaEtapa");
+    toast("Etapa creada");
+    await _jpCargarJerarquia(proyectoId, true);
+  } catch (e) {
+    if (errEl) errEl.textContent = e.message;
+  }
+}
+
+function abrirModalCrearSubtareaEtapaJerarquia(etapaId) {
+  if (!_puedeGestionarSubtareasEtapa()) {
+    toast("No tienes permisos para crear subtareas", "err");
+    return;
+  }
+  if (!etapaId) {
+    toast("Etapa no válida", "err");
+    return;
+  }
+  _jpModalSubtareaEtapaId = etapaId;
+  const etapa = _jerarquiaNodoPorId[etapaId] || {};
+  document.getElementById("jsEtapaId").value = etapaId;
+  document.getElementById("jsEtapaLabel").textContent = etapa.titulo || etapaId;
+  document.getElementById("jsTitulo").value = "";
+  document.getElementById("jsDesc").value = "";
+  document.getElementById("jsError").textContent = "";
+  abrirModal("mJerarquiaSubtareaEtapa");
+  setTimeout(() => document.getElementById("jsTitulo")?.focus(), 60);
+}
+
+async function confirmarCrearSubtareaEtapaJerarquia() {
+  const etapaId = document.getElementById("jsEtapaId").value || _jpModalSubtareaEtapaId;
+  const titulo = document.getElementById("jsTitulo").value.trim();
+  const descripcion = document.getElementById("jsDesc").value.trim();
+  const errEl = document.getElementById("jsError");
+  if (errEl) errEl.textContent = "";
+  if (!etapaId) {
+    if (errEl) errEl.textContent = "Etapa no seleccionada";
+    return;
+  }
+  if (!titulo) {
+    if (errEl) errEl.textContent = "El título de la subtarea es obligatorio";
+    return;
+  }
+  const proyectoId = _jerarquiaProyectoId || document.getElementById("selJerarquiaProy")?.value || "";
+  try {
+    await api("POST", `/etapas/${etapaId}/subtareas`, {
+      titulo,
+      descripcion: descripcion || null,
+    });
+    cerrarModal("mJerarquiaSubtareaEtapa");
+    toast("Subtarea creada en etapa");
+    await _jpCargarJerarquia(proyectoId, true);
+  } catch (e) {
+    if (errEl) errEl.textContent = e.message;
+  }
+}
+
+function abrirModalEditarNodoJerarquia(tipo, nodoId) {
+  if (!_puedeEditarEstructuraProyecto()) {
+    toast("No tienes permisos para editar esta estructura", "err");
+    return;
+  }
+  const tipoNormalizado = String(tipo || "").toLowerCase() === "fase" ? "fase" : "etapa";
+  const nodo = _jerarquiaNodoPorId[nodoId];
+  if (!nodo) {
+    toast("Elemento de jerarquía no encontrado", "err");
+    return;
+  }
+
+  const nombreActual = String(nodo.titulo || "").trim();
+  const titulo = tipoNormalizado === "fase" ? "Editar fase" : "Editar etapa";
+  const label = tipoNormalizado === "fase" ? "Nombre de la fase" : "Nombre de la etapa";
+
+  _jpModalEditarTipo = tipoNormalizado;
+  _jpModalEditarNodoId = nodoId;
+  document.getElementById("jEditTipo").value = tipoNormalizado;
+  document.getElementById("jEditId").value = nodoId;
+  document.getElementById("jEditNombreOriginal").value = nombreActual;
+  document.getElementById("jEditTitulo").innerHTML =
+    `<i class="ph ph-pencil-simple" style="color: var(--a)"></i> ${titulo}`;
+  document.getElementById("jEditNombreLabel").textContent = label;
+  document.getElementById("jEditNombre").value = nombreActual;
+  document.getElementById("jEditError").textContent = "";
+
+  abrirModal("mJerarquiaEditarNodo");
+  setTimeout(() => document.getElementById("jEditNombre")?.focus(), 60);
+}
+
+async function confirmarEditarNodoJerarquia() {
+  const tipo = document.getElementById("jEditTipo").value || _jpModalEditarTipo;
+  const nodoId = document.getElementById("jEditId").value || _jpModalEditarNodoId;
+  const original = document.getElementById("jEditNombreOriginal").value.trim();
+  const nombre = document.getElementById("jEditNombre").value.trim();
+  const errEl = document.getElementById("jEditError");
+  if (errEl) errEl.textContent = "";
+
+  if (!tipo || !nodoId) {
+    if (errEl) errEl.textContent = "No se pudo identificar el elemento a editar";
+    return;
+  }
+  if (!nombre) {
+    if (errEl) errEl.textContent = "El nombre es obligatorio";
+    return;
+  }
+  if (nombre === original) {
+    cerrarModal("mJerarquiaEditarNodo");
+    return;
+  }
+
+  const proyectoId = _jerarquiaProyectoId || document.getElementById("selJerarquiaProy")?.value || "";
+  const endpoint = tipo === "fase" ? `/proyectos/fases/${nodoId}` : `/proyectos/etapas/${nodoId}`;
+  const okMsg = tipo === "fase" ? "Fase actualizada" : "Etapa actualizada";
+  try {
+    await api("PUT", endpoint, { nombre });
+    if (proyectoId) invalidarCacheEstructuraProyecto(proyectoId);
+    cerrarModal("mJerarquiaEditarNodo");
+    toast(okMsg);
+    await _jpCargarJerarquia(proyectoId, true);
+  } catch (e) {
+    if (errEl) errEl.textContent = e.message;
+  }
+}
+
+function abrirModalEliminarNodoJerarquia(tipo, nodoId) {
+  if (!_puedeEditarEstructuraProyecto()) {
+    toast("No tienes permisos para eliminar esta estructura", "err");
+    return;
+  }
+  const tipoNormalizado = String(tipo || "").toLowerCase() === "fase" ? "fase" : "etapa";
+  const nodo = _jerarquiaNodoPorId[nodoId];
+  if (!nodo) {
+    toast("Elemento de jerarquía no encontrado", "err");
+    return;
+  }
+
+  const nombre = String(nodo.titulo || "").trim() || nodoId;
+  const titulo = tipoNormalizado === "fase" ? "Eliminar fase" : "Eliminar etapa";
+  const mensaje = tipoNormalizado === "fase"
+    ? `¿Eliminar la fase "${nombre}"? También se eliminarán sus etapas y subtareas.`
+    : `¿Eliminar la etapa "${nombre}"? También se eliminarán sus subtareas.`;
+
+  _jpModalEliminarTipo = tipoNormalizado;
+  _jpModalEliminarNodoId = nodoId;
+  document.getElementById("jDelTipo").value = tipoNormalizado;
+  document.getElementById("jDelId").value = nodoId;
+  document.getElementById("jDelTitulo").innerHTML =
+    `<i class="ph ph-warning" style="color: #ef4444"></i> ${titulo}`;
+  document.getElementById("jDelMensaje").textContent = mensaje;
+  document.getElementById("jDelError").textContent = "";
+  abrirModal("mJerarquiaEliminarNodo");
+}
+
+async function confirmarEliminarNodoJerarquia() {
+  const tipo = document.getElementById("jDelTipo").value || _jpModalEliminarTipo;
+  const nodoId = document.getElementById("jDelId").value || _jpModalEliminarNodoId;
+  const errEl = document.getElementById("jDelError");
+  if (errEl) errEl.textContent = "";
+
+  if (!tipo || !nodoId) {
+    if (errEl) errEl.textContent = "No se pudo identificar el elemento a eliminar";
+    return;
+  }
+
+  const proyectoId = _jerarquiaProyectoId || document.getElementById("selJerarquiaProy")?.value || "";
+  const endpoint = tipo === "fase" ? `/proyectos/fases/${nodoId}` : `/proyectos/etapas/${nodoId}`;
+  const okMsg = tipo === "fase" ? "Fase eliminada" : "Etapa eliminada";
+  try {
+    await api("DELETE", endpoint);
+    if (proyectoId) invalidarCacheEstructuraProyecto(proyectoId);
+    cerrarModal("mJerarquiaEliminarNodo");
+    toast(okMsg);
+    await _jpCargarJerarquia(proyectoId, true);
+  } catch (e) {
+    if (errEl) errEl.textContent = e.message;
+  }
+}
+
+async function crearFaseJerarquia() {
+  abrirModalCrearFaseJerarquia();
+}
+
+async function jpAccion(tipo, id) {
+  const proyectoId = _jerarquiaProyectoId;
+  if (!proyectoId) {
+    toast("Selecciona un proyecto primero", "err");
+    return;
+  }
+
+  try {
+    if (tipo === "crear-fase") {
+      return await crearFaseJerarquia();
+    }
+
+    if (tipo === "crear-etapa") {
+      abrirModalCrearEtapaJerarquia(id);
+      return;
+    }
+
+    if (tipo === "editar-fase") {
+      abrirModalEditarNodoJerarquia("fase", id);
+      return;
+    }
+
+    if (tipo === "eliminar-fase") {
+      abrirModalEliminarNodoJerarquia("fase", id);
+      return;
+    }
+
+    if (tipo === "editar-etapa") {
+      abrirModalEditarNodoJerarquia("etapa", id);
+      return;
+    }
+
+    if (tipo === "eliminar-etapa") {
+      abrirModalEliminarNodoJerarquia("etapa", id);
+      return;
+    }
+
+    if (tipo === "crear-subtarea") {
+      abrirModalCrearSubtareaEtapaJerarquia(id);
+      return;
+    }
+
+    if (tipo === "toggle-subtarea") {
+      await api("POST", `/subtareas/${id}/toggle`);
+      return await _jpCargarJerarquia(proyectoId, true);
+    }
+
+    if (tipo === "eliminar-subtarea") {
+      if (!confirm("¿Eliminar esta subtarea?")) return;
+      await api("DELETE", `/subtareas/${id}`);
+      toast("Subtarea eliminada");
+      return await _jpCargarJerarquia(proyectoId, true);
+    }
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
+
+function _jpSincronizarSelectorYPermisos(proyectos) {
+  const sel = document.getElementById("selJerarquiaProy");
+  const btnNuevaFase = document.getElementById("btnNuevaFaseJerarquia");
+  if (!sel) return null;
+
+  const opciones =
+    '<option value="">— Selecciona un proyecto —</option>' +
+    proyectos.map((p) => `<option value="${p.id}">${_jpEsc(p.nombre)}</option>`).join("");
+  sel.innerHTML = opciones;
+
+  if (btnNuevaFase) {
+    btnNuevaFase.style.display = _puedeEditarEstructuraProyecto() ? "" : "none";
+  }
+
+  if (!proyectos.length) {
+    sel.value = "";
+    return "";
+  }
+
+  const existeSeleccion = proyectos.some((p) => p.id === _jerarquiaProyectoId);
+  if (existeSeleccion) {
+    sel.value = _jerarquiaProyectoId;
+    return _jerarquiaProyectoId;
+  }
+
+  const porDefecto = proyActualId && proyectos.some((p) => p.id === proyActualId)
+    ? proyActualId
+    : proyectos[0].id;
+
+  sel.value = porDefecto;
+  _jerarquiaProyectoId = porDefecto;
+  return porDefecto;
+}
+
+(function _jpInyectarEstilos() {
+  if (document.getElementById("jpStyles")) return;
+  const style = document.createElement("style");
+  style.id = "jpStyles";
+  style.textContent = `
+    #proyJerarquiaArbol .jp-node{padding:8px;border:1px solid var(--b1);border-radius:8px;background:var(--s2);margin-bottom:8px}
+    #proyJerarquiaArbol .jp-node-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+    #proyJerarquiaArbol .jp-node-main{display:flex;gap:8px;align-items:flex-start;min-width:0;flex:1}
+    #proyJerarquiaArbol .jp-node-ico{font-size:15px;color:var(--a2);margin-top:1px}
+    #proyJerarquiaArbol .jp-node-body{min-width:0;flex:1}
+    #proyJerarquiaArbol .jp-node-title{font-size:12px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #proyJerarquiaArbol .jp-node-meta{font-size:10px;font-family:var(--mono);color:var(--t3)}
+    #proyJerarquiaArbol .jp-node-badges{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+    #proyJerarquiaArbol .jp-node-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+    #proyJerarquiaArbol .jp-node-children{margin-top:8px}
+  `;
+  document.head.appendChild(style);
+})();
+
 async function cargarProyectos() {
   if (!S) return;
   const acciones = document.getElementById("proyAcciones");
   if (S.usuario.rol === "PROJECT_MANAGER" || S.usuario.rol === "ADMIN") {
     acciones.innerHTML = `<button class="btn btn-primary btn-sm" onclick="abrirModal('mProy')"><i class="ph ph-plus"></i> Nuevo proyecto</button>`;
+  } else if (acciones) {
+    acciones.innerHTML = "";
   }
-  document.getElementById("listaProyectos").innerHTML = "Cargando...";
+  const lista = document.getElementById("listaProyectos");
+  if (lista) lista.innerHTML = "Cargando...";
   try {
     const ps = await api("GET", "/proyectos/");
     if (!ps.length) {
       document.getElementById("listaProyectos").innerHTML =
         '<div class="vacío">No hay proyectos</div>';
+      _jpSincronizarSelectorYPermisos([]);
+      await _jpCargarJerarquia("");
       return;
     }
     document.getElementById("listaProyectos").innerHTML = ps
-      .map(
-        (p) => `
+      .map((p) => {
+        const reglas = {
+          ..._REGLAS_DECORATOR_DEFAULTS,
+          ...(p.reglasDecoradores || {}),
+        };
+        const activos = [
+          reglas.auditoriaEnriquecidaActiva ? "Auditoría" : null,
+          reglas.notificacionAutomaticaActiva ? "Notificación" : null,
+          reglas.validacionSlaActiva ? "SLA" : null,
+        ].filter(Boolean);
+
+        return `
       <div class="prow">
         <div class="prow-main">
           <div class="prow-top">
@@ -35,6 +690,14 @@ async function cargarProyectos() {
           <div class="prow-meta">
             <span><i class="ph ph-calendar-blank"></i> Fin: ${fFecha(p.fechaFinEstimada)}</span>
             <span><i class="ph ph-gauge"></i> Progreso: ${Number(p.progreso || 0).toFixed(1)}%</span>
+            <span>
+              <i class="ph ph-stack"></i>
+              ${
+                activos.length
+                  ? `<span class="badge bb" title="${activos.join(", ")}">Decorator ${activos.length}/3</span>`
+                  : '<span class="badge bi">Decorator 0/3</span>'
+              }
+            </span>
           </div>
           <div class="prow-prog">
             <div class="prog"><div class="prog-bar" style="width:${p.progreso}%"></div></div>
@@ -42,21 +705,27 @@ async function cargarProyectos() {
         </div>
         <div class="prow-actions">
           <button class="btn btn-outline btn-xs" onclick="irTablero('${p.id}','${p.nombre}')"><i class='ph ph-kanban'></i> Tablero</button>
+          <button class="btn btn-outline btn-xs" onclick="abrirJerarquiaProyecto('${p.id}')"><i class='ph ph-tree-structure'></i> Estructura</button>
           ${
             S.usuario.rol !== "DEVELOPER"
               ? `
             <button class="btn btn-outline btn-xs" onclick="abrirInvitar('${p.id}')"><i class='ph ph-user-plus'></i> Invitar</button>
+            <button class="btn btn-outline btn-xs" onclick="abrirReglasDecorador('${p.id}')"><i class='ph ph-sliders-horizontal'></i> Reglas</button>
             <button class="btn btn-outline btn-xs" onclick="clonarProyecto('${p.id}')"><i class='ph ph-copy'></i> Clonar</button>
             ${!p.estaArchivado ? `<button class="btn btn-ghost btn-xs" onclick="archivarProyecto('${p.id}')">Archivar</button>` : ""}
           `
               : ""
           }
         </div>
-      </div>`,
-      )
+      </div>`;
+      })
       .join("");
+
+    const proySeleccionado = _jpSincronizarSelectorYPermisos(ps);
+    await _jpCargarJerarquia(proySeleccionado);
   } catch (e) {
     toast(e.message, "err");
+    _jpSetError(e.message || "No se pudieron cargar proyectos");
   }
 }
 
@@ -95,6 +764,72 @@ async function clonarProyecto(id) {
     cargarProyectos();
   } catch (e) {
     toast(e.message, "err");
+  }
+}
+
+async function abrirReglasDecorador(proyId) {
+  const errorEl = document.getElementById("rdError");
+  if (errorEl) errorEl.textContent = "";
+  try {
+    const proyecto = await api("GET", `/proyectos/${proyId}`);
+    const reglas = {
+      ..._REGLAS_DECORATOR_DEFAULTS,
+      ...(proyecto.reglasDecoradores || {}),
+    };
+
+    document.getElementById("rdProyectoId").value = proyId;
+    document.getElementById("rdProyectoTitulo").textContent =
+      proyecto.nombre || proyId;
+    document.getElementById("rdMaxHoras").value = Number(
+      reglas.maxHorasPorTarea ?? _REGLAS_DECORATOR_DEFAULTS.maxHorasPorTarea,
+    );
+    _toggleSet("rdAudit", reglas.auditoriaEnriquecidaActiva);
+    _toggleSet("rdNotif", reglas.notificacionAutomaticaActiva);
+    _toggleSet("rdSla", reglas.validacionSlaActiva);
+    _toggleSet("rdBugUrgente", reglas.notificarBugUrgenteAlPm);
+    _toggleSet("rdMoverEnProgreso", reglas.validarHorasAntesDeMoverEnProgreso);
+    abrirModal("mReglasDecorator");
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
+
+async function guardarReglasDecorador() {
+  const proyId = document.getElementById("rdProyectoId").value;
+  const errorEl = document.getElementById("rdError");
+  if (errorEl) errorEl.textContent = "";
+  if (!proyId) {
+    if (errorEl) errorEl.textContent = "Proyecto no seleccionado";
+    return;
+  }
+
+  const maxHoras = Number(document.getElementById("rdMaxHoras").value);
+  if (!Number.isFinite(maxHoras) || maxHoras < 0) {
+    if (errorEl)
+      errorEl.textContent = "El máximo de horas debe ser un número >= 0";
+    return;
+  }
+
+  try {
+    await api("PUT", `/proyectos/${proyId}`, {
+      reglasDecoradores: {
+        auditoriaEnriquecidaActiva: _toggleGet("rdAudit"),
+        notificacionAutomaticaActiva: _toggleGet("rdNotif"),
+        validacionSlaActiva: _toggleGet("rdSla"),
+        maxHorasPorTarea: maxHoras,
+        notificarBugUrgenteAlPm: _toggleGet("rdBugUrgente"),
+        validarHorasAntesDeMoverEnProgreso: _toggleGet("rdMoverEnProgreso"),
+      },
+    });
+    cerrarModal("mReglasDecorator");
+    toast("Reglas de Decorator actualizadas");
+    if (
+      document.querySelector(".pantalla.activa")?.id === "pantalla-proyectos"
+    ) {
+      cargarProyectos();
+    }
+  } catch (e) {
+    if (errorEl) errorEl.textContent = e.message;
   }
 }
 
@@ -148,7 +883,98 @@ function _invalidarCacheUsuarios() {
   _cacheTsUsuariosActivos = 0;
 }
 /* ══════════ TAREAS ══════════ */
+let _estructuraEditarTarea = null;
+
+function _aDatetimeLocalInput(isoFecha) {
+  if (!isoFecha) return "";
+  const d = new Date(isoFecha);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function _refrescarVistaTrasCambioTarea() {
+  if (!proyActualId) return;
+  const activa = document.querySelector(".pantalla.activa")?.id;
+  if (activa === "pantalla-tareas" && typeof cargarTareasPaginadas === "function") {
+    const pagina = typeof _paginaTareas !== "undefined" ? _paginaTareas : 1;
+    await cargarTareasPaginadas(proyActualId, pagina);
+    return;
+  }
+  if (activa === "pantalla-tablero" && typeof cargarTablero === "function") {
+    await cargarTablero(proyActualId);
+    return;
+  }
+
+  const tareasRefresh = typeof cargarTareasPaginadas === "function"
+    ? cargarTareasPaginadas(
+      proyActualId,
+      typeof _paginaTareas !== "undefined" ? _paginaTareas : 1,
+    ).catch(() => {})
+    : Promise.resolve();
+  const tableroRefresh = typeof cargarTablero === "function"
+    ? cargarTablero(proyActualId).catch(() => {})
+    : Promise.resolve();
+  await Promise.all([tareasRefresh, tableroRefresh]);
+}
+
+function _opcionesFaseParaModal(fases = []) {
+  return (
+    '<option value="">Sin fase</option>' +
+    fases
+      .map((fase) => `<option value="${fase.id}">${fase.nombre}</option>`)
+      .join("")
+  );
+}
+
+function _renderEtapasModalTarea(estructura, faseId, etapaSeleccionada = "") {
+  const selEtapa = document.getElementById("tEtapa");
+  if (!selEtapa) return;
+  const etapas = faseId ? estructura?.etapasPorFase?.[faseId] || [] : [];
+  selEtapa.innerHTML =
+    '<option value="">Sin etapa</option>' +
+    etapas.map((etapa) => `<option value="${etapa.id}">${etapa.nombre}</option>`).join("");
+  if (etapaSeleccionada && etapas.some((e) => e.id === etapaSeleccionada)) {
+    selEtapa.value = etapaSeleccionada;
+  } else {
+    selEtapa.value = "";
+  }
+}
+
+async function _cargarEstructuraModalTarea() {
+  const selFase = document.getElementById("tFase");
+  const selEtapa = document.getElementById("tEtapa");
+  if (!selFase || !selEtapa || !proyActualId) return;
+
+  const fasePrev = selFase.value || "";
+  const etapaPrev = selEtapa.value || "";
+  const estructura = await cargarEstructuraProyecto(proyActualId);
+  const fases = Array.isArray(estructura?.fases) ? estructura.fases : [];
+
+  selFase.innerHTML = _opcionesFaseParaModal(fases);
+  const faseActual = fases.some((fase) => fase.id === fasePrev) ? fasePrev : "";
+  selFase.value = faseActual;
+  _renderEtapasModalTarea(estructura, faseActual, etapaPrev);
+}
+
+async function onCambioFaseTarea() {
+  if (!proyActualId) return;
+  try {
+    const estructura = await cargarEstructuraProyecto(proyActualId);
+    const faseId = document.getElementById("tFase")?.value || "";
+    _renderEtapasModalTarea(estructura, faseId);
+  } catch (e) {
+    document.getElementById("tError").textContent = e.message;
+  }
+}
+
 async function abrirModalTarea() {
+  const proySeleccionado =
+    proyActualId ||
+    document.getElementById("selTareasProy")?.value ||
+    document.getElementById("selPT")?.value ||
+    "";
+  if (proySeleccionado) proyActualId = proySeleccionado;
   if (!proyActualId) {
     toast("Primero selecciona un proyecto", "err");
     return;
@@ -160,7 +986,16 @@ async function abrirModalTarea() {
   document.getElementById("tError").textContent = "";
   document.getElementById("tTit").value = "";
   document.getElementById("tDesc").value = "";
+  const selFase = document.getElementById("tFase");
+  const selEtapa = document.getElementById("tEtapa");
+  if (selFase) selFase.innerHTML = '<option value="">Cargando fases...</option>';
+  if (selEtapa) selEtapa.innerHTML = '<option value="">Sin etapa</option>';
   abrirModal("mTarea");
+
+  const cargaEstructura = _cargarEstructuraModalTarea().catch((e) => {
+    document.getElementById("tError").textContent = e.message;
+  });
+
   // Cargar responsables en segundo plano (el modal ya está visible)
   try {
     miembrosActuales = await _getUsuariosActivos();
@@ -168,6 +1003,7 @@ async function abrirModalTarea() {
   } catch (_) {
     renderRespLista("respLista", []);
   }
+  await cargaEstructura;
 }
 
 function abrirModalTareaCol(colId) {
@@ -176,6 +1012,127 @@ function abrirModalTareaCol(colId) {
     const s = document.getElementById("tCol");
     if (s) s.value = colId;
   }, 50);
+}
+
+function _renderEtapasModalEditarTarea(faseId, etapaSeleccionada = "") {
+  const selEtapa = document.getElementById("edEtapa");
+  if (!selEtapa) return;
+  const etapas = faseId ? _estructuraEditarTarea?.etapasPorFase?.[faseId] || [] : [];
+  selEtapa.innerHTML =
+    '<option value="">Sin etapa</option>' +
+    etapas.map((etapa) => `<option value="${etapa.id}">${etapa.nombre}</option>`).join("");
+  if (etapaSeleccionada && etapas.some((e) => e.id === etapaSeleccionada)) {
+    selEtapa.value = etapaSeleccionada;
+  } else {
+    selEtapa.value = "";
+  }
+}
+
+function onCambioFaseEditarTarea() {
+  const faseId = document.getElementById("edFase")?.value || "";
+  _renderEtapasModalEditarTarea(faseId, "");
+}
+
+async function abrirEditarTarea(tareaId) {
+  const errEl = document.getElementById("edError");
+  if (errEl) errEl.textContent = "";
+  try {
+    const tarea = await api("GET", `/tareas/${tareaId}`);
+    proyActualId = tarea.proyectoId || proyActualId;
+    if (!proyActualId) throw new Error("No se pudo determinar el proyecto de la tarea");
+
+    const [tableros, devs, estructura] = await Promise.all([
+      api("GET", `/proyectos/${proyActualId}/tableros`).catch(() => []),
+      _getUsuariosActivos().catch(() => []),
+      cargarEstructuraProyecto(proyActualId).catch(() => ({
+        fases: [],
+        fasesPorId: {},
+        etapasPorFase: {},
+        etapasPorId: {},
+      })),
+    ]);
+
+    colsActuales = tableros[0]?.columnas || colsActuales || [];
+    miembrosActuales = devs;
+    _estructuraEditarTarea = estructura;
+
+    document.getElementById("edTareaId").value = tarea.id;
+    document.getElementById("edTit").value = tarea.titulo || "";
+    document.getElementById("edDesc").value = tarea.descripcion || "";
+    document.getElementById("edTipo").value = tarea.tipo || "TASK";
+    document.getElementById("edPrio").value = tarea.prioridad || "MEDIA";
+    document.getElementById("edFV").value = _aDatetimeLocalInput(tarea.fechaVencimiento);
+
+    const selCol = document.getElementById("edCol");
+    selCol.innerHTML = colsActuales
+      .map((c) => `<option value="${c.id}">${c.nombre}</option>`)
+      .join("");
+    selCol.value = colsActuales.some((c) => c.id === tarea.columnaId)
+      ? tarea.columnaId
+      : colsActuales[0]?.id || "";
+    document.getElementById("edColOriginal").value = tarea.columnaId || "";
+
+    const fases = Array.isArray(estructura?.fases) ? estructura.fases : [];
+    const contexto = resolverContextoEstructura(estructura, tarea.faseId, tarea.etapaId);
+    const faseInicial = tarea.faseId || contexto.fase?.id || "";
+    const etapaInicial = tarea.etapaId || contexto.etapa?.id || "";
+    const selFase = document.getElementById("edFase");
+    selFase.innerHTML = _opcionesFaseParaModal(fases);
+    selFase.value = fases.some((f) => f.id === faseInicial) ? faseInicial : "";
+    _renderEtapasModalEditarTarea(selFase.value, etapaInicial);
+
+    renderRespLista("edRespLista", tarea.responsables || []);
+    abrirModal("mEditarTarea");
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
+
+async function guardarEdicionTarea() {
+  const errEl = document.getElementById("edError");
+  if (errEl) errEl.textContent = "";
+
+  const tareaId = document.getElementById("edTareaId").value;
+  const titulo = document.getElementById("edTit").value.trim();
+  const descripcion = document.getElementById("edDesc").value.trim();
+  const colNuevo = document.getElementById("edCol").value;
+  const colOriginal = document.getElementById("edColOriginal").value;
+  const faseId = document.getElementById("edFase")?.value || null;
+  const etapaId = document.getElementById("edEtapa")?.value || null;
+
+  if (!tareaId) {
+    if (errEl) errEl.textContent = "Tarea no seleccionada";
+    return;
+  }
+  if (!titulo) {
+    if (errEl) errEl.textContent = "El título es obligatorio";
+    return;
+  }
+
+  const payload = {
+    titulo,
+    descripcion: descripcion || null,
+    tipo: document.getElementById("edTipo").value,
+    prioridad: document.getElementById("edPrio").value,
+    fechaVencimiento: document.getElementById("edFV").value || null,
+    faseId,
+    etapaId,
+    responsables: getSeleccionados("edRespLista"),
+  };
+
+  try {
+    await api("PUT", `/tareas/${tareaId}`, payload);
+    if (colNuevo && colNuevo !== colOriginal) {
+      await api("POST", `/tareas/${tareaId}/mover`, {
+        columnaIdDestino: colNuevo,
+      });
+    }
+    cerrarModal("mEditarTarea");
+    toast("Tarea actualizada");
+    await _refrescarVistaTrasCambioTarea();
+  } catch (e) {
+    if (errEl) errEl.textContent = e.message;
+  }
 }
 
 function renderRespLista(contenedorId, seleccionados) {
@@ -209,6 +1166,8 @@ function getSeleccionados(contenedorId) {
 async function crearTarea() {
   document.getElementById("tError").textContent = "";
   const colId = document.getElementById("tCol").value;
+  const faseId = document.getElementById("tFase")?.value || null;
+  const etapaId = document.getElementById("tEtapa")?.value || null;
   if (!colId) {
     document.getElementById("tError").textContent = "Selecciona una columna";
     return;
@@ -221,19 +1180,15 @@ async function crearTarea() {
       prioridad: document.getElementById("tPrio").value,
       columnaId: colId,
       proyectoId: proyActualId,
+      faseId,
+      etapaId,
       fechaVencimiento: document.getElementById("tFV").value || null,
       responsables: getSeleccionados("respLista"),
       etiquetas: [],
     });
     cerrarModal("mTarea");
     toast("Tarea creada");
-    // Actualizar vista según la pantalla activa
-    const pantallaActiva = document.querySelector(".pantalla.activa");
-    if (pantallaActiva?.id === "pantalla-tareas") {
-      cargarTareasPaginadas(proyActualId, _paginaTareas || 1);
-    } else {
-      cargarTablero(proyActualId);
-    }
+    await _refrescarVistaTrasCambioTarea();
   } catch (e) {
     document.getElementById("tError").textContent = e.message;
   }
@@ -272,7 +1227,7 @@ async function guardarAsignacion() {
     await api("PUT", `/tareas/${tareaId}/responsables`, { responsables: sel });
     cerrarModal("mAsignar");
     toast("Responsables asignados");
-    if (proyActualId) cargarTablero(proyActualId);
+    await _refrescarVistaTrasCambioTarea();
   } catch (e) {
     toast(e.message, "err");
   }
@@ -282,20 +1237,39 @@ async function clonarTarea(id) {
   try {
     await api("POST", `/tareas/${id}/clonar`);
     toast("Tarea clonada");
-    if (proyActualId) cargarTablero(proyActualId);
+    await _refrescarVistaTrasCambioTarea();
   } catch (e) {
     toast(e.message, "err");
   }
 }
 
-async function eliminarTarea(id) {
-  if (!confirm("¿Eliminar esta tarea?")) return;
+function eliminarTarea(id, titulo = "") {
+  const tareaId = String(id || "").trim();
+  if (!tareaId) return;
+
+  document.getElementById("delTareaId").value = tareaId;
+  document.getElementById("delTareaError").textContent = "";
+  document.getElementById("delTareaMsg").textContent = titulo
+    ? `¿Seguro que deseas eliminar la tarea "${titulo}"?`
+    : "¿Seguro que deseas eliminar esta tarea?";
+  abrirModal("mEliminarTarea");
+}
+
+async function confirmarEliminarTarea() {
+  const tareaId = document.getElementById("delTareaId").value;
+  const errEl = document.getElementById("delTareaError");
+  if (errEl) errEl.textContent = "";
+  if (!tareaId) {
+    if (errEl) errEl.textContent = "Tarea no seleccionada";
+    return;
+  }
   try {
-    await api("DELETE", `/tareas/${id}`);
+    await api("DELETE", `/tareas/${tareaId}`);
+    cerrarModal("mEliminarTarea");
     toast("Tarea eliminada");
-    if (proyActualId) cargarTablero(proyActualId);
+    await _refrescarVistaTrasCambioTarea();
   } catch (e) {
-    toast(e.message, "err");
+    if (errEl) errEl.textContent = e.message;
   }
 }
 
@@ -1566,8 +2540,18 @@ async function notifEnviar() {
     const ok = r.enviada;
     const estado = (r.estado || "").toLowerCase();
     const entregado = estado === "delivered";
-    const aceptado = ["accepted", "queued", "sending", "sent", "delivered"].includes(estado);
-    const etiqueta = entregado ? "Entregado" : aceptado ? "Aceptado por Twilio" : "No enviado";
+    const aceptado = [
+      "accepted",
+      "queued",
+      "sending",
+      "sent",
+      "delivered",
+    ].includes(estado);
+    const etiqueta = entregado
+      ? "Entregado"
+      : aceptado
+        ? "Aceptado por Twilio"
+        : "No enviado";
     const ico = ok
       ? '<i class="ph ph-check-circle" style="color:var(--green)"></i>'
       : '<i class="ph ph-x-circle" style="color:var(--red)"></i>';
@@ -1575,9 +2559,10 @@ async function notifEnviar() {
     if (resEl) {
       const estadoTxt = r.estado ? ` · estado: ${r.estado}` : "";
       const sidTxt = r.sid ? ` · SID: ${r.sid}` : "";
-      const errTxt = r.codigo_error || r.mensaje_error
-        ? ` · error_code: ${r.codigo_error || "-"} · ${r.mensaje_error || ""}`
-        : "";
+      const errTxt =
+        r.codigo_error || r.mensaje_error
+          ? ` · error_code: ${r.codigo_error || "-"} · ${r.mensaje_error || ""}`
+          : "";
       resEl.innerHTML =
         `${ico} <strong>${etiqueta}</strong> por ${r.canal || canal}` +
         `${estadoTxt}${sidTxt}` +
@@ -1641,7 +2626,8 @@ async function notifProbarTodos() {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Probando...';
   }
-  if (resEl) resEl.innerHTML = '<span class="spinner"></span> Probando canales...';
+  if (resEl)
+    resEl.innerHTML = '<span class="spinner"></span> Probando canales...';
 
   try {
     const cuerpo = { usuarioId: userId };
@@ -1657,7 +2643,13 @@ async function notifProbarTodos() {
       .map((c) => {
         const x = resultados[c] || {};
         const estado = (x.estado || "").toLowerCase();
-        const aceptado = ["accepted", "queued", "sending", "sent", "delivered"].includes(estado);
+        const aceptado = [
+          "accepted",
+          "queued",
+          "sending",
+          "sent",
+          "delivered",
+        ].includes(estado);
         return `${aceptado ? "✅" : "❌"} ${c.toUpperCase()}: ${x.detalle || "sin detalle"}${x.contacto_usado ? ` · ${x.contacto_usado}` : ""}`;
       })
       .join(" · ");

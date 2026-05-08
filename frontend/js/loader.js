@@ -30,7 +30,7 @@ const PAGINAS_HTML = {
       <!-- Stats decorativas -->
       <div class="login-stats">
         <div class="login-stat">
-          <div class="login-stat-num">5</div>
+          <div class="login-stat-num" id="loginPatronesCount">—</div>
           <div class="login-stat-label">Patrones de diseño</div>
         </div>
         <div class="login-stat-sep"></div>
@@ -111,139 +111,233 @@ const PAGINAS_HTML = {
   dashboard: `<div class="pantalla" id="pantalla-dashboard">
   <div class="dash-wrap">
 
-    <!-- Header -->
-    <div class="dash-header">
+    <div class="dash-hero">
       <div>
-        <div class="dash-title" id="dashSaludo">Dashboard</div>
+        <div class="dash-title" id="dashSaludo">Dashboard estratégico</div>
         <div class="dash-sub">
-          <i class="ph-fill ph-circle" style="font-size:8px;color:var(--green)"></i>
-          En tiempo real &nbsp;·&nbsp; <span id="dashFecha"></span>
+          <i class="ph-fill ph-circle"></i>
+          En tiempo real · <span id="dashFecha"></span>
         </div>
       </div>
-      <div class="flex" style="gap:8px">
-        <select class="fselect" id="selDashProy" style="width:200px;padding:6px 10px;font-size:12px" onchange="actualizarDashboardProy(this.value)">
-          <option value="">— Todos los proyectos —</option>
-        </select>
-        <button class="btn btn-outline btn-sm" onclick="refrescarDashboard()" title="Actualizar datos">
+      <div class="dash-controls">
+        <button class="btn btn-outline btn-sm dash-refresh" onclick="refrescarDashboard()" title="Actualizar dashboard">
           <i class="ph ph-arrows-clockwise"></i>
         </button>
         <div id="dashAcciones"></div>
       </div>
     </div>
 
-    <!-- KPI Cards grandes -->
-    <div class="kpi-grid">
-      <div class="kpi-card" style="--kc:108,99,255">
-        <div class="kpi-icon" style="background:rgba(108,99,255,.15);color:#8b83ff">
-          <i class="ph ph-folder-open"></i>
+    <div class="card">
+      <div class="chart-header" style="margin-bottom:12px">
+        <div>
+          <div class="chart-title"><i class="ph ph-funnel"></i> Filtros analíticos</div>
+          <div class="chart-sub">Cruza proyecto, fase, etapa, responsable y contexto jerárquico</div>
         </div>
-        <div class="kpi-body">
-          <div class="kpi-label">Proyectos activos</div>
-          <div class="kpi-value" id="stProy">—</div>
-          <div class="kpi-sub" id="stProySub">—</div>
-        </div>
-        <div class="kpi-glow" style="background:radial-gradient(circle at 80% 50%,rgba(108,99,255,.18) 0%,transparent 65%)"></div>
+        <button class="btn btn-ghost btn-xs" onclick="limpiarFiltrosDashboard()">
+          <i class="ph ph-eraser"></i> Limpiar
+        </button>
       </div>
-
-      <div class="kpi-card" style="--kc:52,211,153">
-        <div class="kpi-icon" style="background:rgba(52,211,153,.15);color:#34d399">
-          <i class="ph ph-check-square"></i>
+      <div class="frow" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+        <div class="fg">
+          <label class="flabel">Proyecto</label>
+          <select class="fselect" id="selDashProy" onchange="actualizarDashboardProy(this.value)">
+            <option value="">— Todos los proyectos —</option>
+          </select>
         </div>
-        <div class="kpi-body">
-          <div class="kpi-label">Tareas totales</div>
-          <div class="kpi-value" id="stTareas">—</div>
-          <div class="kpi-sub" id="stTareasSub">en el proyecto</div>
+        <div class="fg">
+          <label class="flabel">Fase</label>
+          <select class="fselect" id="selDashFase" onchange="onCambioFaseDashboard()">
+            <option value="">— Todas las fases —</option>
+          </select>
         </div>
-        <div class="kpi-glow" style="background:radial-gradient(circle at 80% 50%,rgba(52,211,153,.15) 0%,transparent 65%)"></div>
+        <div class="fg">
+          <label class="flabel">Etapa</label>
+          <select class="fselect" id="selDashEtapa" onchange="onCambioFiltroDashboard()">
+            <option value="">— Todas las etapas —</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="flabel">Responsable</label>
+          <select class="fselect" id="selDashResp" onchange="onCambioFiltroDashboard()">
+            <option value="">— Todo el equipo —</option>
+          </select>
+        </div>
       </div>
-
-      <div class="kpi-card" style="--kc:248,113,113">
-        <div class="kpi-icon" style="background:rgba(248,113,113,.15);color:#f87171">
-          <i class="ph ph-warning-circle"></i>
+      <div class="frow" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:10px">
+        <div class="fg">
+          <label class="flabel">Prioridad</label>
+          <select class="fselect" id="selDashPrio" onchange="onCambioFiltroDashboard()">
+            <option value="">— Todas —</option>
+            <option value="BAJA">Baja</option>
+            <option value="MEDIA">Media</option>
+            <option value="ALTA">Alta</option>
+            <option value="URGENTE">Urgente</option>
+          </select>
         </div>
-        <div class="kpi-body">
-          <div class="kpi-label">Tareas vencidas</div>
-          <div class="kpi-value" id="stVencidas" style="color:#f87171">—</div>
-          <div class="kpi-sub" id="stVencidasSub">requieren atención</div>
+        <div class="fg">
+          <label class="flabel">Tipo</label>
+          <select class="fselect" id="selDashTipo" onchange="onCambioFiltroDashboard()">
+            <option value="">— Todos —</option>
+            <option value="TASK">Task</option>
+            <option value="BUG">Bug</option>
+            <option value="FEATURE">Feature</option>
+            <option value="IMPROVEMENT">Improvement</option>
+          </select>
         </div>
-        <div class="kpi-glow" style="background:radial-gradient(circle at 80% 50%,rgba(248,113,113,.15) 0%,transparent 65%)"></div>
+        <div class="fg">
+          <label class="flabel">Contexto</label>
+          <select class="fselect" id="selDashContexto" onchange="onCambioFiltroDashboard()">
+            <option value="todos">Todo el trabajo</option>
+            <option value="estructura">Solo con fase/etapa</option>
+            <option value="legadas">Solo legadas sin fase/etapa</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="flabel">Ventana de velocidad</label>
+          <select class="fselect" id="selDashSemanas" onchange="onCambioFiltroDashboard()">
+            <option value="4">4 semanas</option>
+            <option value="8" selected>8 semanas</option>
+            <option value="12">12 semanas</option>
+          </select>
+        </div>
       </div>
-
-      <div class="kpi-card" style="--kc:251,191,36" id="statNotifWrap">
-        <div class="kpi-icon" style="background:rgba(251,191,36,.15);color:#fbbf24">
-          <i class="ph ph-bell-ringing"></i>
-        </div>
-        <div class="kpi-body">
-          <div class="kpi-label">Sin leer</div>
-          <div class="kpi-value" id="stNotif">—</div>
-          <div class="kpi-sub">notificaciones</div>
-        </div>
-        <div class="kpi-glow" style="background:radial-gradient(circle at 80% 50%,rgba(251,191,36,.15) 0%,transparent 65%)"></div>
-      </div>
-
-      <div class="kpi-card" style="--kc:96,165,250;display:none" id="statUsuariosWrap">
-        <div class="kpi-icon" style="background:rgba(96,165,250,.15);color:#60a5fa">
-          <i class="ph ph-users"></i>
-        </div>
-        <div class="kpi-body">
-          <div class="kpi-label">Usuarios</div>
-          <div class="kpi-value" id="stUsers">—</div>
-          <div class="kpi-sub">en el sistema</div>
-        </div>
-        <div class="kpi-glow" style="background:radial-gradient(circle at 80% 50%,rgba(96,165,250,.15) 0%,transparent 65%)"></div>
+      <div style="margin-top:10px;display:flex;justify-content:flex-end">
+        <label class="txt3" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--b1);border-radius:var(--r);background:var(--s2);cursor:pointer">
+          <input type="checkbox" id="chkDashIncluirSubEtapa" checked onchange="onCambioFiltroDashboard()">
+          Incluir subtareas de etapa
+        </label>
       </div>
     </div>
 
-    <!-- Fila principal: donut grande + velocidad -->
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-primary">
+        <div class="kpi-icon"><i class="ph ph-chart-line-up"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Trabajo visible</div>
+          <div class="kpi-value" id="stDashTrabajo">—</div>
+          <div class="kpi-sub" id="stDashTrabajoSub">—</div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-success">
+        <div class="kpi-icon"><i class="ph ph-kanban"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Tareas Kanban</div>
+          <div class="kpi-value" id="stDashTareas">—</div>
+          <div class="kpi-sub" id="stDashTareasSub">—</div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info">
+        <div class="kpi-icon"><i class="ph ph-tree-structure"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Subtareas de etapa</div>
+          <div class="kpi-value" id="stDashSubEtapas">—</div>
+          <div class="kpi-sub" id="stDashSubEtapasSub">—</div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-danger">
+        <div class="kpi-icon"><i class="ph ph-warning-circle"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Trabajo vencido</div>
+          <div class="kpi-value" id="stDashVencidas">—</div>
+          <div class="kpi-sub" id="stDashVencidasSub">—</div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-warning">
+        <div class="kpi-icon"><i class="ph ph-git-branch"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Cobertura estructura</div>
+          <div class="kpi-value" id="stDashCobertura">—</div>
+          <div class="kpi-sub" id="stDashCoberturaSub">—</div>
+        </div>
+      </div>
+    </div>
+
     <div class="dash-row-main">
       <div class="card dash-chart-lg">
         <div class="chart-header">
           <div>
-            <div class="chart-title"><i class="ph ph-chart-donut" style="color:var(--a)"></i> Estado del proyecto</div>
-            <div class="chart-sub">Distribución de tareas por columna</div>
+            <div class="chart-title"><i class="ph ph-kanban"></i> Flujo por estado</div>
+            <div class="chart-sub">Columnas Kanban + subtareas de etapa</div>
           </div>
         </div>
-        <div id="chartColumnas" style="height:280px"></div>
+        <div id="chartDashEstado" style="height:300px"></div>
       </div>
-
       <div class="card dash-chart-md">
         <div class="chart-header">
           <div>
-            <div class="chart-title"><i class="ph ph-trend-up" style="color:var(--green)"></i> Velocidad del equipo</div>
-            <div class="chart-sub">Tareas creadas por semana</div>
+            <div class="chart-title"><i class="ph ph-trend-up"></i> Velocidad semanal</div>
+            <div class="chart-sub">Creación de trabajo en la ventana seleccionada</div>
           </div>
         </div>
-        <div id="chartVelocidad" style="height:280px"></div>
+        <div id="chartDashVelocidad" style="height:300px"></div>
       </div>
     </div>
 
-    <!-- Fila secundaria: prioridad + tipo -->
     <div class="dash-row-2">
       <div class="card">
         <div class="chart-header">
-          <div class="chart-title"><i class="ph ph-chart-bar-horizontal" style="color:var(--amber)"></i> Por prioridad</div>
+          <div>
+            <div class="chart-title"><i class="ph ph-flag-banner"></i> Distribución por fase</div>
+            <div class="chart-sub">Incluye tareas y subtareas de etapa según filtros</div>
+          </div>
         </div>
-        <div id="chartPrioridad" style="height:200px"></div>
+        <div id="chartDashFase" style="height:220px"></div>
       </div>
       <div class="card">
         <div class="chart-header">
-          <div class="chart-title"><i class="ph ph-tag" style="color:var(--blue)"></i> Por tipo</div>
+          <div>
+            <div class="chart-title"><i class="ph ph-signpost"></i> Carga por etapa</div>
+            <div class="chart-sub">Comparativo tareas vs subtareas de etapa</div>
+          </div>
         </div>
-        <div id="chartTipo" style="height:200px"></div>
+        <div id="chartDashEtapa" style="height:220px"></div>
       </div>
       <div class="card">
         <div class="chart-header">
-          <div class="chart-title"><i class="ph ph-users-three" style="color:var(--purple)"></i> Carga del equipo</div>
+          <div>
+            <div class="chart-title"><i class="ph ph-users-three"></i> Carga del equipo</div>
+            <div class="chart-sub">Asignaciones activas por miembro</div>
+          </div>
         </div>
-        <div id="chartEquipo" style="height:200px"></div>
+        <div id="chartDashResponsables" style="height:220px"></div>
       </div>
     </div>
 
-    <!-- Proyectos recientes -->
-    <div class="card" style="margin-bottom:24px">
+    <div class="dash-row-main">
+      <div class="card dash-chart-md">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title"><i class="ph ph-chart-pie-slice"></i> Prioridad</div>
+            <div class="chart-sub">Mix de prioridades en tareas</div>
+          </div>
+        </div>
+        <div id="chartDashPrioridad" style="height:250px"></div>
+      </div>
+      <div class="card dash-chart-md">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title"><i class="ph ph-chart-bar"></i> Tipo de trabajo</div>
+            <div class="chart-sub">Task / Bug / Feature / Improvement</div>
+          </div>
+        </div>
+        <div id="chartDashTipo" style="height:250px"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="chart-header" style="margin-bottom:12px">
+        <div>
+          <div class="chart-title"><i class="ph ph-lightbulb"></i> Insights del estado actual</div>
+          <div class="chart-sub">Lectura automática basada en fase, etapa y tareas legadas</div>
+        </div>
+      </div>
+      <div id="dashAlertas" class="vacío">Analizando...</div>
+    </div>
+
+    <div class="card dash-projects-panel" style="margin-bottom:24px">
       <div class="chart-header" style="margin-bottom:16px">
         <div>
-          <div class="chart-title"><i class="ph ph-folder-simple-star" style="color:var(--a)"></i> Proyectos recientes</div>
+          <div class="chart-title"><i class="ph ph-folder-simple-star"></i> Proyectos recientes</div>
           <div class="chart-sub">Últimos proyectos con actividad</div>
         </div>
         <div id="dashAccionesProy"></div>
@@ -261,6 +355,35 @@ const PAGINAS_HTML = {
       <div class="flex" id="proyAcciones"></div>
     </div>
     <div class="card"><div class="card-t"><i class="ph ph-list"></i> Listado</div><div id="listaProyectos" class="vacío">Cargando...</div></div>
+    <div class="card" id="proyJerarquiaCard">
+      <div class="flex-between" style="margin-bottom:12px;gap:10px;flex-wrap:wrap">
+        <div class="card-t" style="margin-bottom:0">
+          <i class="ph ph-tree-structure"></i> Estructura del proyecto — Composite
+        </div>
+        <div class="flex" style="gap:8px">
+          <button class="btn btn-outline btn-xs" onclick="refrescarJerarquiaProyecto()">
+            <i class="ph ph-arrows-clockwise"></i> Refrescar
+          </button>
+          <button class="btn btn-primary btn-xs" id="btnNuevaFaseJerarquia" style="display:none" onclick="crearFaseJerarquia()">
+            <i class="ph ph-plus"></i> Nueva fase
+          </button>
+        </div>
+      </div>
+      <div class="frow" style="margin-bottom:10px">
+        <div class="fg">
+          <label class="flabel">Proyecto</label>
+          <select class="fselect" id="selJerarquiaProy" onchange="seleccionarProyectoJerarquia(this.value)">
+            <option value="">— Selecciona un proyecto —</option>
+          </select>
+        </div>
+        <div class="fg" style="max-width:280px">
+          <label class="flabel">Resumen</label>
+          <div id="proyJerarquiaStats" class="txt3" style="font-size:12px;padding:8px 10px;border:1px solid var(--b1);border-radius:var(--r);background:var(--s2)">—</div>
+        </div>
+      </div>
+      <div class="ferror" id="proyJerarquiaError"></div>
+      <div id="proyJerarquiaArbol" class="vacío">Selecciona un proyecto para visualizar fases, etapas y subtareas.</div>
+    </div>
   </div>
 </div>`,
   tablero: `<div class="pantalla" id="pantalla-tablero">
@@ -285,10 +408,16 @@ const PAGINAS_HTML = {
   tareas: `<div class="pantalla" id="pantalla-tareas">
   <div class="page-wrap">
     <div class="page-head">
-      <div><div class="page-title">Tareas</div><div class="page-desc">Gestión y seguimiento de tareas</div></div>
-      <div class="flex">
+      <div><div class="page-title">Tareas</div><div class="page-desc">Gestión y seguimiento de tareas (Builder + Composite + Decorator)</div></div>
+      <div class="flex" style="gap:8px;flex-wrap:wrap">
         <select class="fselect" id="selTareasProy" style="width:200px;padding:6px 10px" onchange="cargarTareasPaginadas(this.value,1)">
           <option value="">— Proyecto —</option>
+        </select>
+        <select class="fselect" id="fTareaFase" style="width:180px;padding:6px 10px" onchange="onCambioFiltroFaseTareas()">
+          <option value="">— Fase —</option>
+        </select>
+        <select class="fselect" id="fTareaEtapa" style="width:180px;padding:6px 10px" onchange="onCambioFiltroEtapaTareas()">
+          <option value="">— Etapa —</option>
         </select>
         <button class="btn btn-primary btn-sm" onclick="abrirModalTarea()">
           <i class="ph ph-plus"></i> Nueva
@@ -298,8 +427,8 @@ const PAGINAS_HTML = {
     <div class="card">
       <div class="tabla-wrap">
         <table>
-          <thead><tr><th>Título</th><th>Tipo</th><th>Prioridad</th><th>Responsables</th><th>Estado</th><th>Acciones</th></tr></thead>
-          <tbody id="tbTareas"><tr><td colspan="6" class="vacío">Selecciona un proyecto para ver las tareas</td></tr></tbody>
+          <thead><tr><th>Título</th><th>Tipo</th><th>Prioridad</th><th>Contexto</th><th>Responsables</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody id="tbTareas"><tr><td colspan="7" class="vacío">Selecciona un proyecto para ver las tareas</td></tr></tbody>
         </table>
       </div>
       <div id="pagTareas"></div>

@@ -41,6 +41,11 @@ API REST desarrollada con **FastAPI** y **MongoDB Atlas**.
 | **Builder** | `patterns/builder/` | Construye tareas complejas y subtareas paso a paso |
 | **Adapter** | `patterns/adapter/` | Traduce notificaciones a Email/WhatsApp/SMS |
 | **Bridge** | `patterns/bridge/` | Exporta reportes separando tipo de reporte y formato de salida |
+| **Composite** | `patterns/composite/` | Construye jerarquías de proyecto/fase/etapa/subtarea y calcula progreso recursivo |
+| **Decorator** | `patterns/decorator/` | Aplica reglas configurables de SLA, notificación y auditoría en tareas |
+| **Facade** | `patterns/facade/` | Simplifica operaciones complejas de ciclo de vida y estructura de proyectos |
+| **Proxy** | `patterns/proxy/` | Ejecuta validaciones previas/posteriores para la gestión de tareas y proyectos |
+| **Flyweight** | `patterns/flyweight/` | Reutiliza perfiles visuales compartidos para tareas por tipo/prioridad/estado |
 
 ### Autenticación
 
@@ -155,9 +160,9 @@ def schema_openapi_personalizado():
 
     schema["tags"] = [
         {"name": "Usuarios",         "description": "RF-01 · Registro, login JWT, perfil y gestión de cuentas"},
-        {"name": "Proyectos",         "description": "RF-02 · CRUD de proyectos, invitaciones, clonado (Prototype) y archivado"},
+        {"name": "Proyectos",         "description": "RF-02 · CRUD de proyectos, invitaciones, clonado (Prototype), archivado y simplificación de operaciones complejas (Facade + Proxy)"},
         {"name": "Tableros",          "description": "RF-03 · Tableros Kanban, columnas y límites WIP"},
-        {"name": "Tareas",            "description": "RF-04 · Gestión de tareas (Factory Method + Builder + Prototype), comentarios y tiempo"},
+        {"name": "Tareas",            "description": "RF-04 · Gestión de tareas (Factory Method + Builder + Prototype + Composite + Decorator + Proxy + Flyweight), comentarios y tiempo"},
         {"name": "Subtareas",         "description": "RF-04b · Subtareas por tarea — Patrón Builder (ConstructorSubtarea)"},
         {"name": "Notificaciones",    "description": "RF-05 · IN_APP + Email/WhatsApp/SMS via Factory Method + Adapter. SSE en tiempo real."},
         {"name": "Reportes y Configuración", "description": "RF-06/07/08/09 · Historial, auditoría, métricas, filtros y configuración del sistema"},

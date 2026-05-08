@@ -9,6 +9,10 @@ let S = null;
 let proyActualId = null;
 let colsActuales = [];
 let miembrosActuales = [];
+const _cacheEstructuraProyecto = new Map();
+const MOBILE_SIDEBAR_BREAKPOINT = 900;
+let _obsTablasTarjeta = null;
+let _rafTablasTarjeta = null;
 
 /* ── HTTP ── */
 async function api(met, ruta, body = null, token = true) {
@@ -74,6 +78,16 @@ function toggleTema() {
 }
 
 /* ── SIDEBAR ── */
+function _esSidebarMovil() {
+  return window.matchMedia(`(max-width: ${MOBILE_SIDEBAR_BREAKPOINT}px)`).matches;
+}
+
+function _cerrarSidebarMovil() {
+  const app = document.getElementById("app");
+  if (!app) return;
+  app.classList.remove("mobile-sidebar-open");
+}
+
 function _aplicarSidebarColapsado(colapsado) {
   const app = document.getElementById("app");
   if (!app) return;
@@ -84,14 +98,75 @@ function _aplicarSidebarColapsado(colapsado) {
 function toggleSidebar() {
   const app = document.getElementById("app");
   if (!app || app.classList.contains("sin-sidebar")) return;
+  if (_esSidebarMovil()) {
+    app.classList.toggle("mobile-sidebar-open");
+    return;
+  }
   _aplicarSidebarColapsado(!app.classList.contains("sidebar-collapsed"));
 }
 
 function _restaurarEstadoSidebar() {
   const app = document.getElementById("app");
   if (!app || app.classList.contains("sin-sidebar")) return;
+  if (_esSidebarMovil()) {
+    app.classList.remove("sidebar-collapsed");
+    return;
+  }
+  _cerrarSidebarMovil();
   const guardado = localStorage.getItem("tf_sidebar_collapsed") === "1";
   _aplicarSidebarColapsado(guardado);
+}
+
+/* ── TABLAS EN TARJETAS ── */
+function _aplicarTablasComoTarjetas() {
+  document.querySelectorAll(".tabla-wrap table").forEach((tabla) => {
+    tabla.classList.add("tabla-cards");
+    const encabezados = Array.from(tabla.querySelectorAll("thead th")).map((th) =>
+      th.textContent.trim(),
+    );
+
+    tabla.querySelectorAll("tbody tr").forEach((fila) => {
+      const celdas = Array.from(fila.children).filter(
+        (n) => n.tagName === "TD",
+      );
+      const esFilaInformativa =
+        celdas.length === 1 && Number(celdas[0].getAttribute("colspan") || 1) > 1;
+      fila.classList.toggle("tabla-row-empty", esFilaInformativa);
+
+      celdas.forEach((celda, idx) => {
+        const etiqueta = esFilaInformativa ? "" : encabezados[idx] || "";
+        if (etiqueta) {
+          celda.setAttribute("data-label", etiqueta);
+        } else {
+          celda.removeAttribute("data-label");
+        }
+        const esAcciones = etiqueta.toLowerCase().includes("accion");
+        celda.classList.toggle("td-acciones", esAcciones);
+      });
+    });
+  });
+}
+
+function _programarTablasComoTarjetas() {
+  if (_rafTablasTarjeta) return;
+  _rafTablasTarjeta = requestAnimationFrame(() => {
+    _rafTablasTarjeta = null;
+    _aplicarTablasComoTarjetas();
+  });
+}
+
+function _iniciarObserverTablasTarjeta() {
+  if (_obsTablasTarjeta) return;
+  const contenido = document.getElementById("contenido");
+  if (!contenido) return;
+  _obsTablasTarjeta = new MutationObserver(() => {
+    _programarTablasComoTarjetas();
+  });
+  _obsTablasTarjeta.observe(contenido, {
+    childList: true,
+    subtree: true,
+  });
+  _programarTablasComoTarjetas();
 }
 
 /* ── NAVEGACIÓN ── */
@@ -120,6 +195,8 @@ function mostrarPantalla(nombre) {
   };
   if (bc) bc.textContent = etiquetas[nombre] || "";
   _limpiarPantalla(nombre);
+  _cerrarSidebarMovil();
+  _programarTablasComoTarjetas();
 
   const acc = {
     dashboard: cargarDashboard,
@@ -244,6 +321,68 @@ function colPrio(p) {
   return m[p] || "p-baja";
 }
 
+async function cargarEstructuraProyecto(proyectoId, forzar = false) {
+  if (!proyectoId) {
+    return { fases: [], fasesPorId: {}, etapasPorFase: {}, etapasPorId: {} };
+  }
+  if (!forzar && _cacheEstructuraProyecto.has(proyectoId)) {
+    return _cacheEstructuraProyecto.get(proyectoId);
+  }
+
+  const [fases, jerarquia] = await Promise.all([
+    api("GET", `/proyectos/${proyectoId}/fases`),
+    api("GET", `/proyectos/${proyectoId}/jerarquia`),
+  ]);
+  const fasesLista = Array.isArray(fases) ? fases : [];
+
+  const fasesPorId = {};
+  const etapasPorFase = {};
+  const etapasPorId = {};
+
+  fasesLista.forEach((fase) => {
+    fasesPorId[fase.id] = fase;
+    if (!etapasPorFase[fase.id]) etapasPorFase[fase.id] = [];
+  });
+
+  const fasesJerarquia = Array.isArray(jerarquia?.hijos) ? jerarquia.hijos : [];
+  fasesJerarquia.forEach((nodoFase) => {
+    const faseId = nodoFase?.id;
+    if (!faseId) return;
+    if (!etapasPorFase[faseId]) etapasPorFase[faseId] = [];
+    const etapas = Array.isArray(nodoFase?.hijos) ? nodoFase.hijos : [];
+    etapas.forEach((nodoEtapa) => {
+      if (!nodoEtapa?.id) return;
+      const etapa = {
+        id: nodoEtapa.id,
+        nombre: nodoEtapa.titulo || nodoEtapa.nombre || "Etapa",
+        faseId,
+      };
+      etapasPorFase[faseId].push(etapa);
+      etapasPorId[etapa.id] = etapa;
+    });
+  });
+
+  const estructura = { fases: fasesLista, fasesPorId, etapasPorFase, etapasPorId };
+  _cacheEstructuraProyecto.set(proyectoId, estructura);
+  return estructura;
+}
+
+function invalidarCacheEstructuraProyecto(proyectoId = null) {
+  if (proyectoId) {
+    _cacheEstructuraProyecto.delete(proyectoId);
+    return;
+  }
+  _cacheEstructuraProyecto.clear();
+}
+
+function resolverContextoEstructura(estructura, faseId, etapaId) {
+  const etapa = etapaId ? estructura?.etapasPorId?.[etapaId] || null : null;
+  const fase =
+    (faseId ? estructura?.fasesPorId?.[faseId] || null : null) ||
+    (etapa?.faseId ? estructura?.fasesPorId?.[etapa.faseId] || null : null);
+  return { fase, etapa };
+}
+
 /* ── AUTENTICACIÓN ── */
 async function iniciarSesion() {
   const btn = document.getElementById("btnLogin");
@@ -308,6 +447,7 @@ function cerrarSesion() {
   colsActuales = [];
   miembrosActuales = [];
   if (typeof _cacheUsuarios !== "undefined") _cacheUsuarios = null;
+  invalidarCacheEstructuraProyecto();
   localStorage.removeItem("tf_s");
 
   [
@@ -323,6 +463,7 @@ function cerrarSesion() {
   });
   document.getElementById("app").classList.add("sin-sidebar");
   document.getElementById("app").classList.remove("sidebar-collapsed");
+  document.getElementById("app").classList.remove("mobile-sidebar-open");
   const btnSidebar = document.getElementById("btnSidebarToggle");
   if (btnSidebar) btnSidebar.style.display = "none";
   document
@@ -415,6 +556,24 @@ function _inicializarTareas() {
   }
 }
 
+/* ── LOGIN STATS DINÁMICO ── */
+async function actualizarStatsLogin() {
+  const el = document.getElementById("loginPatronesCount");
+  if (!el) return;
+  try {
+    const r = await fetch(`${API}/openapi.json`, { method: "GET" });
+    if (!r.ok) throw new Error("No se pudo leer OpenAPI");
+    const schema = await r.json();
+    const descripcion = schema?.info?.description || "";
+    const filasPatrones =
+      descripcion.match(/\|\s+\*\*[^|]+\*\*\s+\|\s+`patterns\//g) || [];
+    const total = filasPatrones.length;
+    el.textContent = total > 0 ? String(total) : "—";
+  } catch (_) {
+    el.textContent = "—";
+  }
+}
+
 /* ── INIT ── */
 (function init() {
   document.addEventListener("taskflow:ready", () => {
@@ -458,5 +617,23 @@ function _inicializarTareas() {
     const hoy = new Date().toISOString().split("T")[0];
     const pFI = document.getElementById("pFI");
     if (pFI) pFI.value = hoy;
+
+    window.addEventListener("resize", _restaurarEstadoSidebar);
+    window.addEventListener("orientationchange", _restaurarEstadoSidebar);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") _cerrarSidebarMovil();
+    });
+    document.addEventListener("click", (e) => {
+      const app = document.getElementById("app");
+      if (!app || !app.classList.contains("mobile-sidebar-open")) return;
+      const sidebar = document.getElementById("sidebar");
+      const btnSidebar = document.getElementById("btnSidebarToggle");
+      const target = e.target;
+      if (sidebar?.contains(target) || btnSidebar?.contains(target)) return;
+      _cerrarSidebarMovil();
+    });
+    _iniciarObserverTablasTarjeta();
+
+    actualizarStatsLogin();
   });
 })();

@@ -1,15 +1,24 @@
 from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException
-from collections import defaultdict
 import uuid
 
 from app.db.conexion import ConexionMongoDB
 from app.schemas.reportes import GuardarFiltro, ActualizarConfiguracion
 from app.patterns.abstract_factory.fabrica_temas import obtener_variables_tema
+from app.patterns.composite.componente_tarea import (
+    construir_componente_proyecto_jerarquico,
+    construir_bosque_tareas,
+    calcular_progreso_global_compuesto,
+)
 
 
 def _db():
     return ConexionMongoDB.obtener_instancia().obtener_base_datos()
+
+
+def _es_columna_completada(nombre_columna: str) -> bool:
+    nombre = (nombre_columna or "").lower()
+    return "complet" in nombre or "listo" in nombre
 
 
 async def obtener_metricas_proyecto(proyecto_id: str) -> dict:
@@ -25,6 +34,14 @@ async def obtener_metricas_proyecto(proyecto_id: str) -> dict:
     }
 
     tareas = [t async for t in db["tareas"].find({"proyectoId": proyecto_id})]
+    subtareas = [s async for s in db["subtareas"].find({"proyectoId": proyecto_id})]
+    fases = [f async for f in db["fases"].find({"proyectoId": proyecto_id})]
+    etapas = [e async for e in db["etapas"].find({"proyectoId": proyecto_id})]
+    columnas_completadas = {
+        columna_id
+        for columna_id, nombre in columnas.items()
+        if _es_columna_completada(nombre)
+    }
 
     ahora = datetime.now(timezone.utc)
     tareas_por_estado: dict = {}      # columna nombre → count
@@ -41,7 +58,7 @@ async def obtener_metricas_proyecto(proyecto_id: str) -> dict:
         tareas_por_estado[col_nombre] = tareas_por_estado.get(col_nombre, 0) + 1
 
         # Detectar columna de completados
-        if "complet" in col_nombre.lower() or "listo" in col_nombre.lower():
+        if _es_columna_completada(col_nombre):
             completadas += 1
 
         # Por responsable
@@ -65,7 +82,27 @@ async def obtener_metricas_proyecto(proyecto_id: str) -> dict:
                 vencidas += 1
 
     total = len(tareas)
-    progreso = round((completadas / total * 100) if total > 0 else 0, 1)
+    try:
+        if fases:
+            proyecto = await db["proyectos"].find_one({"_id": proyecto_id})
+            if not proyecto:
+                raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+            componente = construir_componente_proyecto_jerarquico(
+                proyecto=proyecto,
+                fases=fases,
+                etapas=etapas,
+                subtareas=subtareas,
+            )
+            progreso = componente.calcular_progreso()
+        else:
+            bosque = construir_bosque_tareas(
+                tareas=tareas,
+                subtareas=subtareas,
+                columnas_completadas=columnas_completadas,
+            )
+            progreso = calcular_progreso_global_compuesto(bosque)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
     # Velocidad: tareas creadas/completadas en las últimas 8 semanas
     velocidad = await _calcular_velocidad_semanal(db, proyecto_id, semanas=8)

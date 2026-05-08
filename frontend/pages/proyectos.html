@@ -11,5 +11,64 @@
       <div class="card-t"><i class="ph ph-list"></i> Listado</div>
       <div id="listaProyectos" class="vacío">Cargando...</div>
     </div>
+    <div class="card" id="proyJerarquiaCard">
+      <div
+        class="flex-between"
+        style="margin-bottom: 12px; gap: 10px; flex-wrap: wrap"
+      >
+        <div class="card-t" style="margin-bottom: 0">
+          <i class="ph ph-tree-structure"></i> Estructura del proyecto —
+          Composite
+        </div>
+        <div class="flex" style="gap: 8px">
+          <button
+            class="btn btn-outline btn-xs"
+            onclick="refrescarJerarquiaProyecto()"
+          >
+            <i class="ph ph-arrows-clockwise"></i> Refrescar
+          </button>
+          <button
+            class="btn btn-primary btn-xs"
+            id="btnNuevaFaseJerarquia"
+            style="display: none"
+            onclick="crearFaseJerarquia()"
+          >
+            <i class="ph ph-plus"></i> Nueva fase
+          </button>
+        </div>
+      </div>
+      <div class="frow" style="margin-bottom: 10px">
+        <div class="fg">
+          <label class="flabel">Proyecto</label>
+          <select
+            class="fselect"
+            id="selJerarquiaProy"
+            onchange="seleccionarProyectoJerarquia(this.value)"
+          >
+            <option value="">— Selecciona un proyecto —</option>
+          </select>
+        </div>
+        <div class="fg" style="max-width: 280px">
+          <label class="flabel">Resumen</label>
+          <div
+            id="proyJerarquiaStats"
+            class="txt3"
+            style="
+              font-size: 12px;
+              padding: 8px 10px;
+              border: 1px solid var(--b1);
+              border-radius: var(--r);
+              background: var(--s2);
+            "
+          >
+            —
+          </div>
+        </div>
+      </div>
+      <div class="ferror" id="proyJerarquiaError"></div>
+      <div id="proyJerarquiaArbol" class="vacío">
+        Selecciona un proyecto para visualizar fases, etapas y subtareas.
+      </div>
+    </div>
   </div>
 </div>

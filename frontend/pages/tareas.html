@@ -5,7 +5,7 @@
         <div class="page-title">Tareas</div>
         <div class="page-desc">Gestión y seguimiento de tareas</div>
       </div>
-      <div class="flex">
+      <div class="flex" style="gap: 8px; flex-wrap: wrap">
         <select
           class="fselect"
           id="selTareasProy"
@@ -13,6 +13,22 @@
           onchange="cargarTareasPaginadas(this.value, 1)"
         >
           <option value="">— Proyecto —</option>
+        </select>
+        <select
+          class="fselect"
+          id="fTareaFase"
+          style="width: 180px; padding: 6px 10px"
+          onchange="onCambioFiltroFaseTareas()"
+        >
+          <option value="">— Fase —</option>
+        </select>
+        <select
+          class="fselect"
+          id="fTareaEtapa"
+          style="width: 180px; padding: 6px 10px"
+          onchange="onCambioFiltroEtapaTareas()"
+        >
+          <option value="">— Etapa —</option>
         </select>
         <button class="btn btn-primary btn-sm" onclick="abrirModalTarea()">
           <i class="ph ph-plus"></i> Nueva
@@ -27,6 +43,7 @@
               <th>Título</th>
               <th>Tipo</th>
               <th>Prioridad</th>
+              <th>Contexto</th>
               <th>Responsables</th>
               <th>Estado</th>
               <th>Acciones</th>
@@ -34,7 +51,7 @@
           </thead>
           <tbody id="tbTareas">
             <tr>
-              <td colspan="6" class="vacío">
+              <td colspan="7" class="vacío">
                 Selecciona un proyecto para ver las tareas
               </td>
             </tr>

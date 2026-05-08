@@ -4,11 +4,6 @@ PATRÓN ADAPTER — Adaptees concretos de notificación.
 Cada clase adapta la interfaz estándar (INotificacionAdapter) a la API
 externa específica del canal, traduciendo los tipos de datos en ambas
 direcciones (request y response).
-
-Equivalencia con el ejemplo bancario:
-  XBankAdaptee  →  WhatsAppAdaptee
-  YBankAdaptee  →  EmailAdaptee
-                →  SmsAdaptee (canal adicional)
 """
 from app.patterns.adapter.notificacion_adapter import (
     INotificacionAdapter,

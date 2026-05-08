@@ -13,6 +13,8 @@ class CrearTarea(BaseModel):
     horasEstimadas: Optional[float] = Field(None, ge=0)
     columnaId: str
     proyectoId: str
+    faseId: Optional[str] = None
+    etapaId: Optional[str] = None
     responsables: List[str] = []
     etiquetas: List[str] = []
 
@@ -24,6 +26,8 @@ class ActualizarTarea(BaseModel):
     tipo: Optional[TipoTarea] = None
     fechaVencimiento: Optional[datetime] = None
     horasEstimadas: Optional[float] = Field(None, ge=0)
+    faseId: Optional[str] = None
+    etapaId: Optional[str] = None
     responsables: Optional[List[str]] = None
     etiquetas: Optional[List[str]] = None
 
@@ -59,6 +63,22 @@ class RespuestaComentario(BaseModel):
     actualizadoEn: datetime
 
 
+class RespuestaPerfilVisualTarea(BaseModel):
+    claveCompartida: str
+    tipo: str
+    prioridad: str
+    estadoTemporal: str
+    icono: str
+    colorFondo: str
+    colorBorde: str
+    colorTexto: str
+
+
+class RespuestaEstadisticasFlyweightTareas(BaseModel):
+    flyweightsCompartidos: int
+    clavesCompartidas: List[str]
+
+
 class RespuestaTarea(BaseModel):
     id: str
     titulo: str
@@ -69,9 +89,12 @@ class RespuestaTarea(BaseModel):
     horasEstimadas: Optional[float]
     columnaId: str
     proyectoId: str
+    faseId: Optional[str] = None
+    etapaId: Optional[str] = None
     responsables: List[str]
     etiquetas: List[str]
     estaVencida: bool
     subtareas: List[str] = []
     horasRegistradas: float = 0.0
+    perfilVisual: Optional[RespuestaPerfilVisualTarea] = None
     creadoEn: datetime

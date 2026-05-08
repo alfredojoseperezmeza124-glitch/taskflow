@@ -23,7 +23,7 @@ enrutador = APIRouter(tags=["Reportes y Configuración"])
 
 @enrutador.get("/proyectos/{proyecto_id}/metricas",
     summary="Dashboard de métricas del proyecto",
-    description="Devuelve: total de tareas, distribución por columna/prioridad/tipo, tareas por usuario, vencidas, completadas, progreso y velocidad semanal.")
+    description="Devuelve: total de tareas, distribución por columna/prioridad/tipo, tareas por usuario, vencidas, completadas, progreso jerárquico (Composite) y velocidad semanal.")
 async def metricas(proyecto_id: str, _: dict = Depends(obtener_usuario_actual)):
     return await servicio_reporte.obtener_metricas_proyecto(proyecto_id)
 

@@ -19,7 +19,7 @@
       src="https://unpkg.com/@phosphor-icons/web@2.1.1/src/index.js"
       defer
     ></script>
-    <link rel="stylesheet" href="css/estilos.css?v=1775694201" />
+    <link rel="stylesheet" href="css/estilos.css?v=1775694601" />
   </head>
   <body>
     <div class="app" id="app">
@@ -284,6 +284,20 @@
           <label class="flabel">Columna</label>
           <select class="fselect" id="tCol"></select>
         </div>
+        <div class="frow">
+          <div class="fg">
+            <label class="flabel">Fase</label>
+            <select class="fselect" id="tFase" onchange="onCambioFaseTarea()">
+              <option value="">Sin fase</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label class="flabel">Etapa</label>
+            <select class="fselect" id="tEtapa">
+              <option value="">Sin etapa</option>
+            </select>
+          </div>
+        </div>
         <div class="fg">
           <label class="flabel">Fecha de vencimiento</label>
           <input class="finput" id="tFV" type="datetime-local" />
@@ -299,6 +313,247 @@
           </button>
           <button class="btn btn-primary" onclick="crearTarea()">
             <i class="ph ph-plus"></i> Crear tarea
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="mJerarquiaFase">
+      <div class="modal" style="width: 420px">
+        <div class="modal-t">
+          <i class="ph ph-flag-banner" style="color: var(--a)"></i> Nueva fase
+        </div>
+        <input type="hidden" id="jfProyectoId" />
+        <div class="fg">
+          <label class="flabel">Proyecto</label>
+          <div class="txt3" id="jfProyectoLabel">—</div>
+        </div>
+        <div class="fg">
+          <label class="flabel">Nombre de la fase</label>
+          <input class="finput" id="jfNombre" placeholder="Ej: Planeación" />
+        </div>
+        <div class="fg">
+          <label class="flabel">Descripción (opcional)</label>
+          <textarea
+            class="ftextarea"
+            id="jfDesc"
+            placeholder="Describe el objetivo de la fase..."
+          ></textarea>
+        </div>
+        <div class="ferror" id="jfError"></div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="cerrarModal('mJerarquiaFase')">
+            Cancelar
+          </button>
+          <button class="btn btn-primary" onclick="confirmarCrearFaseJerarquia()">
+            <i class="ph ph-plus"></i> Crear fase
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="mJerarquiaEtapa">
+      <div class="modal" style="width: 420px">
+        <div class="modal-t">
+          <i class="ph ph-signpost" style="color: var(--a)"></i> Nueva etapa
+        </div>
+        <input type="hidden" id="jeFaseId" />
+        <div class="fg">
+          <label class="flabel">Fase</label>
+          <div class="txt3" id="jeFaseLabel">—</div>
+        </div>
+        <div class="fg">
+          <label class="flabel">Nombre de la etapa</label>
+          <input class="finput" id="jeNombre" placeholder="Ej: Diseño UI" />
+        </div>
+        <div class="fg">
+          <label class="flabel">Descripción (opcional)</label>
+          <textarea
+            class="ftextarea"
+            id="jeDesc"
+            placeholder="Describe el alcance de la etapa..."
+          ></textarea>
+        </div>
+        <div class="ferror" id="jeError"></div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="cerrarModal('mJerarquiaEtapa')">
+            Cancelar
+          </button>
+          <button class="btn btn-primary" onclick="confirmarCrearEtapaJerarquia()">
+            <i class="ph ph-plus"></i> Crear etapa
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="mJerarquiaSubtareaEtapa">
+      <div class="modal" style="width: 460px">
+        <div class="modal-t">
+          <i class="ph ph-check-square-offset" style="color: var(--a)"></i> Nueva
+          subtarea de etapa
+        </div>
+        <input type="hidden" id="jsEtapaId" />
+        <div class="fg">
+          <label class="flabel">Etapa</label>
+          <div class="txt3" id="jsEtapaLabel">—</div>
+        </div>
+        <div class="fg">
+          <label class="flabel">Título</label>
+          <input class="finput" id="jsTitulo" placeholder="Título de la subtarea" />
+        </div>
+        <div class="fg">
+          <label class="flabel">Descripción (opcional)</label>
+          <textarea
+            class="ftextarea"
+            id="jsDesc"
+            placeholder="Detalles de la subtarea..."
+          ></textarea>
+        </div>
+        <div class="ferror" id="jsError"></div>
+        <div class="modal-actions">
+          <button
+            class="btn btn-ghost"
+            onclick="cerrarModal('mJerarquiaSubtareaEtapa')"
+          >
+            Cancelar
+          </button>
+          <button
+            class="btn btn-primary"
+            onclick="confirmarCrearSubtareaEtapaJerarquia()"
+          >
+            <i class="ph ph-plus"></i> Crear subtarea
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="mJerarquiaEditarNodo">
+      <div class="modal" style="width: 430px">
+        <div class="modal-t" id="jEditTitulo">
+          <i class="ph ph-pencil-simple" style="color: var(--a)"></i> Editar
+          elemento
+        </div>
+        <input type="hidden" id="jEditTipo" />
+        <input type="hidden" id="jEditId" />
+        <input type="hidden" id="jEditNombreOriginal" />
+        <div class="fg">
+          <label class="flabel" id="jEditNombreLabel">Nombre</label>
+          <input class="finput" id="jEditNombre" placeholder="Nuevo nombre" />
+        </div>
+        <div class="ferror" id="jEditError"></div>
+        <div class="modal-actions">
+          <button
+            class="btn btn-ghost"
+            onclick="cerrarModal('mJerarquiaEditarNodo')"
+          >
+            Cancelar
+          </button>
+          <button class="btn btn-primary" onclick="confirmarEditarNodoJerarquia()">
+            <i class="ph ph-floppy-disk"></i> Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="mJerarquiaEliminarNodo">
+      <div class="modal" style="width: 430px">
+        <div class="modal-t" id="jDelTitulo">
+          <i class="ph ph-warning" style="color: #ef4444"></i> Confirmar
+          eliminación
+        </div>
+        <input type="hidden" id="jDelTipo" />
+        <input type="hidden" id="jDelId" />
+        <div class="txt3" id="jDelMensaje" style="line-height: 1.6">
+          ¿Seguro que deseas eliminar este elemento?
+        </div>
+        <div class="ferror" id="jDelError"></div>
+        <div class="modal-actions">
+          <button
+            class="btn btn-ghost"
+            onclick="cerrarModal('mJerarquiaEliminarNodo')"
+          >
+            Cancelar
+          </button>
+          <button class="btn btn-red" onclick="confirmarEliminarNodoJerarquia()">
+            <i class="ph ph-trash"></i> Eliminar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="mEditarTarea">
+      <div class="modal">
+        <div class="modal-t">
+          <i class="ph ph-pencil-simple" style="color: var(--a)"></i> Editar
+          tarea
+        </div>
+        <input type="hidden" id="edTareaId" />
+        <input type="hidden" id="edColOriginal" />
+        <div class="fg">
+          <label class="flabel">Título</label>
+          <input class="finput" id="edTit" placeholder="Título de la tarea" />
+        </div>
+        <div class="fg">
+          <label class="flabel">Descripción</label>
+          <textarea
+            class="ftextarea"
+            id="edDesc"
+            placeholder="Descripción opcional..."
+          ></textarea>
+        </div>
+        <div class="frow">
+          <div class="fg">
+            <label class="flabel">Tipo</label>
+            <select class="fselect" id="edTipo">
+              <option value="TASK">Task</option>
+              <option value="BUG">Bug</option>
+              <option value="FEATURE">Feature</option>
+              <option value="IMPROVEMENT">Improvement</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label class="flabel">Prioridad</label>
+            <select class="fselect" id="edPrio">
+              <option value="BAJA">Baja</option>
+              <option value="MEDIA">Media</option>
+              <option value="ALTA">Alta</option>
+              <option value="URGENTE">Urgente</option>
+            </select>
+          </div>
+        </div>
+        <div class="fg">
+          <label class="flabel">Columna</label>
+          <select class="fselect" id="edCol"></select>
+        </div>
+        <div class="frow">
+          <div class="fg">
+            <label class="flabel">Fase</label>
+            <select class="fselect" id="edFase" onchange="onCambioFaseEditarTarea()">
+              <option value="">Sin fase</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label class="flabel">Etapa</label>
+            <select class="fselect" id="edEtapa">
+              <option value="">Sin etapa</option>
+            </select>
+          </div>
+        </div>
+        <div class="fg">
+          <label class="flabel">Fecha de vencimiento</label>
+          <input class="finput" id="edFV" type="datetime-local" />
+        </div>
+        <div class="fg">
+          <label class="flabel">Responsables</label>
+          <div class="resp-lista" id="edRespLista"></div>
+        </div>
+        <div class="ferror" id="edError"></div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="cerrarModal('mEditarTarea')">
+            Cancelar
+          </button>
+          <button class="btn btn-primary" onclick="guardarEdicionTarea()">
+            <i class="ph ph-floppy-disk"></i> Guardar cambios
           </button>
         </div>
       </div>
@@ -326,6 +581,27 @@
       </div>
     </div>
 
+    <div class="overlay" id="mEliminarTarea">
+      <div class="modal" style="width: 430px">
+        <div class="modal-t">
+          <i class="ph ph-warning" style="color: #ef4444"></i> Eliminar tarea
+        </div>
+        <input type="hidden" id="delTareaId" />
+        <div class="txt3" id="delTareaMsg" style="line-height: 1.6">
+          ¿Seguro que deseas eliminar esta tarea?
+        </div>
+        <div class="ferror" id="delTareaError"></div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="cerrarModal('mEliminarTarea')">
+            Cancelar
+          </button>
+          <button class="btn btn-red" onclick="confirmarEliminarTarea()">
+            <i class="ph ph-trash"></i> Eliminar
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="overlay" id="mInvitar">
       <div class="modal" style="width: 380px">
         <div class="modal-t">
@@ -348,6 +624,177 @@
           </button>
           <button class="btn btn-primary" onclick="invitarMiembro()">
             <i class="ph ph-paper-plane-right"></i> Invitar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="mReglasDecorator">
+      <div class="modal" style="width: 560px">
+        <div class="modal-t">
+          <i class="ph ph-stack" style="color: var(--a)"></i> Reglas por
+          proyecto — Patrón Decorator
+        </div>
+        <input type="hidden" id="rdProyectoId" />
+        <div
+          style="
+            margin-bottom: 14px;
+            padding: 10px 12px;
+            border: 1px solid var(--b1);
+            border-radius: var(--r);
+            background: var(--s2);
+          "
+        >
+          <div class="txt3" style="font-size: 11px; margin-bottom: 4px">
+            Proyecto
+          </div>
+          <div id="rdProyectoTitulo" style="font-weight: 600; color: var(--t1)">
+            —
+          </div>
+        </div>
+
+        <div style="display: grid; gap: 8px">
+          <div
+            class="flex-between"
+            style="
+              padding: 10px 12px;
+              border: 1px solid var(--b1);
+              border-radius: var(--r);
+              background: var(--s2);
+            "
+          >
+            <div>
+              <div style="font-size: 12px; font-weight: 500; color: var(--t1)">
+                Auditoría enriquecida
+              </div>
+              <div class="txt3" style="font-size: 11px">
+                Registra eventos PRE/POST de crear, actualizar y mover.
+              </div>
+            </div>
+            <div
+              class="toggle on"
+              id="rdAudit"
+              onclick="this.classList.toggle('on')"
+            ></div>
+          </div>
+
+          <div
+            class="flex-between"
+            style="
+              padding: 10px 12px;
+              border: 1px solid var(--b1);
+              border-radius: var(--r);
+              background: var(--s2);
+            "
+          >
+            <div>
+              <div style="font-size: 12px; font-weight: 500; color: var(--t1)">
+                Notificación automática
+              </div>
+              <div class="txt3" style="font-size: 11px">
+                Notifica automáticamente BUG URGENTE al PM.
+              </div>
+            </div>
+            <div
+              class="toggle on"
+              id="rdNotif"
+              onclick="this.classList.toggle('on')"
+            ></div>
+          </div>
+
+          <div
+            class="flex-between"
+            style="
+              padding: 10px 12px;
+              border: 1px solid var(--b1);
+              border-radius: var(--r);
+              background: var(--s2);
+            "
+          >
+            <div>
+              <div style="font-size: 12px; font-weight: 500; color: var(--t1)">
+                Validación SLA
+              </div>
+              <div class="txt3" style="font-size: 11px">
+                Valida horas estimadas en creación y movimientos.
+              </div>
+            </div>
+            <div
+              class="toggle on"
+              id="rdSla"
+              onclick="this.classList.toggle('on')"
+            ></div>
+          </div>
+
+          <div class="frow">
+            <div class="fg">
+              <label class="flabel">Máximo de horas por tarea (SLA)</label>
+              <input
+                class="finput"
+                id="rdMaxHoras"
+                type="number"
+                min="0"
+                step="0.5"
+              />
+            </div>
+            <div class="fg" style="justify-content: flex-end">
+              <div
+                class="flex-between"
+                style="
+                  padding: 10px 12px;
+                  border: 1px solid var(--b1);
+                  border-radius: var(--r);
+                  background: var(--s2);
+                "
+              >
+                <div>
+                  <div
+                    style="font-size: 12px; font-weight: 500; color: var(--t1)"
+                  >
+                    Notificar BUG URGENTE al PM
+                  </div>
+                </div>
+                <div
+                  class="toggle on"
+                  id="rdBugUrgente"
+                  onclick="this.classList.toggle('on')"
+                ></div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="flex-between"
+            style="
+              padding: 10px 12px;
+              border: 1px solid var(--b1);
+              border-radius: var(--r);
+              background: var(--s2);
+            "
+          >
+            <div>
+              <div style="font-size: 12px; font-weight: 500; color: var(--t1)">
+                Exigir horas antes de mover a En Progreso
+              </div>
+            </div>
+            <div
+              class="toggle on"
+              id="rdMoverEnProgreso"
+              onclick="this.classList.toggle('on')"
+            ></div>
+          </div>
+        </div>
+
+        <div class="ferror" id="rdError"></div>
+        <div class="modal-actions">
+          <button
+            class="btn btn-ghost"
+            onclick="cerrarModal('mReglasDecorator')"
+          >
+            Cancelar
+          </button>
+          <button class="btn btn-primary" onclick="guardarReglasDecorador()">
+            <i class="ph ph-floppy-disk"></i> Guardar reglas
           </button>
         </div>
       </div>

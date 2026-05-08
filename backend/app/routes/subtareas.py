@@ -24,6 +24,34 @@ async def listar_subtareas(
     return await servicio_subtarea.listar_subtareas(tarea_id)
 
 
+@enrutador.get(
+    "/etapas/{etapa_id}/subtareas",
+    summary="Listar subtareas de una etapa",
+    description="Devuelve todas las subtareas vinculadas a una etapa del proyecto.",
+)
+async def listar_subtareas_etapa(
+    etapa_id: str,
+    _: dict = Depends(obtener_usuario_actual),
+):
+    return await servicio_subtarea.listar_subtareas_etapa(etapa_id)
+
+
+@enrutador.get(
+    "/proyectos/{proyecto_id}/subtareas-etapa",
+    summary="Listar subtareas de etapa de un proyecto",
+    description="Devuelve las subtareas asociadas a etapas del proyecto, incluyendo contexto de fase/etapa.",
+)
+async def listar_subtareas_etapa_proyecto(
+    proyecto_id: str,
+    usuario: dict = Depends(obtener_usuario_actual),
+):
+    return await servicio_subtarea.listar_subtareas_etapa_proyecto(
+        proyecto_id,
+        usuario["_id"],
+        usuario["rol"],
+    )
+
+
 @enrutador.post(
     "/tareas/{tarea_id}/subtareas",
     status_code=201,
@@ -40,6 +68,23 @@ async def crear_subtarea(
     usuario: dict = Depends(requerir_rol(*_ROLES)),
 ):
     return await servicio_subtarea.crear_subtarea(tarea_id, body, usuario["_id"])
+
+
+@enrutador.post(
+    "/etapas/{etapa_id}/subtareas",
+    status_code=201,
+    summary="Crear subtarea en una etapa",
+    description=(
+        "Crea una subtarea asociada a una etapa de proyecto. "
+        "Campos: `titulo` (requerido), `descripcion`, `responsables`, `fechaVencimiento`."
+    ),
+)
+async def crear_subtarea_en_etapa(
+    etapa_id: str,
+    body: dict,
+    usuario: dict = Depends(requerir_rol(*_ROLES)),
+):
+    return await servicio_subtarea.crear_subtarea_en_etapa(etapa_id, body, usuario["_id"])
 
 
 @enrutador.put(
