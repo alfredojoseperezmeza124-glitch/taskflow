@@ -23,6 +23,13 @@ from app.patterns.flyweight.perfiles_visuales_tarea import (
     obtener_estadisticas_pool_flyweight_tareas,
 )
 from app.patterns.proxy.proxy_gestion import ProxyGestionTareas
+from app.patterns.command.bus import CommandBus
+from app.patterns.command.command import ComandoGenerico
+from app.patterns.observer.eventos import (
+    TareaCreadaEvento,
+    TareaMovidaEvento,
+    TareaActualizadaEvento,
+)
 from app.services.servicio_notificacion import crear_notificacion_interna
 from app.services.servicio_mencion import extraer_y_notificar_menciones, resaltar_menciones
 
@@ -36,6 +43,12 @@ def _normalizar_referencia_estructura(valor: str | None) -> str | None:
         return None
     limpio = valor.strip()
     return limpio if limpio else None
+
+
+async def _publicar_evento(evento) -> None:
+    from app.core.gestor_eventos import gestor_eventos
+
+    await gestor_eventos.publicar_evento(evento)
 
 
 async def _resolver_fase_y_etapa_tarea(
@@ -145,50 +158,47 @@ async def _construir_servicio_tarea_decorado(db, proyecto_id: str) -> ServicioTa
 
 async def _crear_tarea_base(db, datos: CrearTarea, usuario_id: str) -> dict:
     """Núcleo de creación de tareas (Factory Method)."""
-    fase_id, etapa_id = await _resolver_fase_y_etapa_tarea(
-        db,
-        datos.proyectoId,
-        datos.faseId,
-        datos.etapaId,
-    )
-    creador = obtener_creador(datos.tipo.value)
-    nueva_tarea = creador.crear(
-        titulo=datos.titulo,
-        columna_id=datos.columnaId,
-        proyecto_id=datos.proyectoId,
-        creado_por=usuario_id,
-        descripcion=datos.descripcion,
-        responsables=datos.responsables,
-        fecha_vencimiento=datos.fechaVencimiento,
-        horas_estimadas=datos.horasEstimadas,
-        etiquetas=datos.etiquetas,
-    )
-    if fase_id:
-        nueva_tarea["faseId"] = fase_id
-    if etapa_id:
-        nueva_tarea["etapaId"] = etapa_id
-    await db["tareas"].insert_one(nueva_tarea)
-    await _registrar_auditoria(
-        db,
-        "tarea",
-        nueva_tarea["_id"],
-        "CREADA",
-        usuario_id,
-        None,
-        nueva_tarea,
-        datos.proyectoId,
-    )
-    for responsable_id in datos.responsables:
-        await crear_notificacion_interna(
+
+    async def _ejecutar_creacion() -> dict:
+        fase_id, etapa_id = await _resolver_fase_y_etapa_tarea(
             db,
-            responsable_id,
-            f"Se te ha asignado la tarea: {datos.titulo}",
-            "TAREA_ASIGNADA",
-            tarea_id=nueva_tarea["_id"],
-            proyecto_id=datos.proyectoId,
-            titulo_tarea=datos.titulo,
+            datos.proyectoId,
+            datos.faseId,
+            datos.etapaId,
         )
-    return _serializar(nueva_tarea)
+        creador = obtener_creador(datos.tipo.value)
+        nueva_tarea = creador.crear(
+            titulo=datos.titulo,
+            columna_id=datos.columnaId,
+            proyecto_id=datos.proyectoId,
+            creado_por=usuario_id,
+            descripcion=datos.descripcion,
+            responsables=datos.responsables,
+            fecha_vencimiento=datos.fechaVencimiento,
+            horas_estimadas=datos.horasEstimadas,
+            etiquetas=datos.etiquetas,
+        )
+        if fase_id:
+            nueva_tarea["faseId"] = fase_id
+        if etapa_id:
+            nueva_tarea["etapaId"] = etapa_id
+        await db["tareas"].insert_one(nueva_tarea)
+
+        evento = TareaCreadaEvento(
+            creador_id=usuario_id,
+            proyecto_id=datos.proyectoId,
+            tarea_id=nueva_tarea["_id"],
+            titulo_tarea=datos.titulo,
+            usuarios_destino=list(datos.responsables or []),
+        )
+        await _publicar_evento(evento)
+        return _serializar(nueva_tarea)
+
+    comando = ComandoGenerico(
+        descripcion=f"Crear tarea {datos.titulo}",
+        operacion=_ejecutar_creacion,
+    )
+    return await CommandBus().ejecutar(comando)
 
 
 async def _actualizar_tarea_base(db, tarea_id: str, datos: ActualizarTarea, usuario_id: str) -> dict:
@@ -241,27 +251,18 @@ async def _actualizar_tarea_base(db, tarea_id: str, datos: ActualizarTarea, usua
     cambios_auditados = dict(cambios_set)
     if cambios_unset:
         cambios_auditados.update({campo: None for campo in cambios_unset.keys()})
-    await _registrar_auditoria(
-        db,
-        "tarea",
-        tarea_id,
-        "ACTUALIZADA",
-        usuario_id,
-        tarea,
-        cambios_auditados,
-        tarea["proyectoId"],
-    )
 
-    for responsable_id in nuevos_asignados:
-        await crear_notificacion_interna(
-            db,
-            responsable_id,
-            f"Se te ha asignado la tarea: {tarea['titulo']}",
-            "TAREA_ASIGNADA",
-            tarea_id=tarea_id,
-            proyecto_id=tarea["proyectoId"],
-            titulo_tarea=tarea["titulo"],
-        )
+    evento = TareaActualizadaEvento(
+        creador_id=usuario_id,
+        proyecto_id=tarea["proyectoId"],
+        tarea_id=tarea_id,
+        titulo_tarea=tarea["titulo"],
+        usuarios_destino=list(set(tarea.get("responsables", []) + nuevos_asignados)),
+        cambios=cambios_auditados,
+        nuevos_asignados=nuevos_asignados,
+        metadatos={"tipo": "ACTUALIZADA"},
+    )
+    await _publicar_evento(evento)
     return await obtener_tarea(tarea_id)
 
 
@@ -288,28 +289,17 @@ async def _mover_tarea_base(db, tarea_id: str, datos: MoverTarea, usuario_id: st
         {"_id": tarea_id},
         {"$set": {"columnaId": datos.columnaIdDestino, "actualizadoEn": datetime.now(timezone.utc)}},
     )
-    await _registrar_auditoria(
-        db,
-        "tarea",
-        tarea_id,
-        "MOVIDA",
-        usuario_id,
-        {"columnaId": columna_anterior},
-        {"columnaId": datos.columnaIdDestino},
-        tarea["proyectoId"],
-    )
 
-    titulo_tarea = tarea["titulo"]
-    for responsable_id in tarea.get("responsables", []):
-        await crear_notificacion_interna(
-            db,
-            responsable_id,
-            f"La tarea '{titulo_tarea}' fue movida",
-            "ESTADO_TAREA_CAMBIADO",
-            tarea_id=tarea_id,
-            proyecto_id=tarea["proyectoId"],
-            titulo_tarea=titulo_tarea,
-        )
+    evento = TareaMovidaEvento(
+        creador_id=usuario_id,
+        proyecto_id=tarea["proyectoId"],
+        tarea_id=tarea_id,
+        titulo_tarea=tarea["titulo"],
+        usuarios_destino=list(tarea.get("responsables", [])),
+        columna_anterior=columna_anterior,
+        columna_actual=columna_destino.get("nombre"),
+    )
+    await _publicar_evento(evento)
     return await obtener_tarea(tarea_id)
 
 
@@ -506,16 +496,18 @@ async def asignar_responsables(tarea_id: str, responsables: list[str], usuario_i
         {"_id": tarea_id},
         {"$set": {"responsables": responsables, "actualizadoEn": datetime.now(timezone.utc)}},
     )
-    for r_id in nuevos:
-        await crear_notificacion_interna(
-            db,
-            r_id,
-            f"Se te ha asignado la tarea: {tarea['titulo']}",
-            "TAREA_ASIGNADA",
-            tarea_id=tarea_id,
-            proyecto_id=tarea["proyectoId"],
-            titulo_tarea=tarea["titulo"],
-        )
+
+    evento = TareaActualizadaEvento(
+        creador_id=usuario_id,
+        proyecto_id=tarea["proyectoId"],
+        tarea_id=tarea_id,
+        titulo_tarea=tarea["titulo"],
+        usuarios_destino=list(set(responsables)),
+        cambios={"responsables": responsables},
+        nuevos_asignados=nuevos,
+        metadatos={"tipo": "ASIGNAR_RESPONSABLES"},
+    )
+    await _publicar_evento(evento)
     return await obtener_tarea(tarea_id)
 
 

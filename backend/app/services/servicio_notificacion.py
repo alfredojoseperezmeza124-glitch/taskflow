@@ -7,6 +7,9 @@ from app.db.conexion import ConexionMongoDB
 from app.schemas.notificaciones import ActualizarPreferencias
 from app.patterns.adapter.notificacion_adapter import SolicitudNotificacion
 from app.patterns.adapter.proveedor_notificacion import ProveedorNotificacion
+from app.patterns.command.bus import CommandBus
+from app.patterns.command.command import ComandoGenerico
+from app.patterns.strategy.estrategia_entrega_notificacion import EstrategiaEntregaNotificacionFactory
 from app.core.configuracion import configuracion
 
 _proveedor_notificacion = ProveedorNotificacion()
@@ -139,59 +142,68 @@ async def enviar_notificacion_externa(
     content_variables: str | None = None,
 ) -> dict:
     """
-    Envía notificación por canal externo usando Factory Method + Adapter.
-
-    CORRECCIÓN: contacto_directo tiene prioridad absoluta.
-    Si no viene contacto_directo, busca en preferencias guardadas.
-    Si tampoco hay ahí, devuelve error claro en vez de "sin-numero".
+    Envía notificación por canal externo usando Strategy + Factory/Adapter.
     """
     db = _db()
     usuario = await db["usuarios"].find_one({"_id": usuario_id})
     if not usuario:
         return {"enviada": False, "canal": canal, "detalle": "Usuario no encontrado"}
 
-    # ── Resolver contacto según el canal ──────────────────────────────────
-    if canal == "email":
-        # Email siempre usa el correo del usuario registrado
-        contacto = usuario.get("email", "")
-        if not contacto:
-            return {"enviada": False, "canal": canal, "detalle": "El usuario no tiene email registrado"}
+    preferencias = await obtener_preferencias(usuario_id)
+    canal_solicitado = canal.strip().lower()
+    canales = []
+    estrategia = None
 
+    if canal_solicitado in {"email", "in_app", "ambos"}:
+        estrategia = EstrategiaEntregaNotificacionFactory.seleccionar(preferencias, canal_solicitado)
+        canales = [c.value for c in estrategia.canales()]
     else:
-        # WhatsApp / SMS: prioridad (1) contacto_directo, (2) preferencias BD
-        contacto_directo_limpio = (contacto_directo or "").strip()
+        canales = [canal_solicitado]
 
-        if contacto_directo_limpio:
-            # El frontend envió el número — usarlo directamente
-            contacto = contacto_directo_limpio
+    resultados: list[dict] = []
+    bus = CommandBus()
+
+    async def _enviar_canal(canal_actual: str) -> dict:
+        if canal_actual.upper() == "IN_APP":
+            await crear_notificacion_interna(
+                db,
+                usuario_id,
+                mensaje,
+                "NOTIFICACION_EXTERNA",
+            )
+            return {"enviada": True, "canal": "IN_APP", "detalle": "Notificación in-app creada"}
+
+        contacto = None
+        if canal_actual == "email":
+            contacto = usuario.get("email", "")
+            if not contacto:
+                return {"enviada": False, "canal": "email", "detalle": "El usuario no tiene email registrado", "contacto_usado": None}
         else:
-            # Buscar en preferencias guardadas del usuario
-            prefs = await db["preferencias_notificacion"].find_one({"usuarioId": usuario_id}) or {}
-            if canal == "whatsapp" and prefs.get("telefonoWhatsapp"):
-                contacto = prefs["telefonoWhatsapp"]
-            elif canal == "sms" and prefs.get("telefonoSms"):
-                contacto = prefs["telefonoSms"]
+            contacto_directo_limpio = (contacto_directo or "").strip()
+            if contacto_directo_limpio:
+                contacto = contacto_directo_limpio
             else:
-                # Sin número disponible — error claro, no "sin-numero"
-                return {
-                    "enviada": False,
-                    "canal": canal,
-                    "detalle": f"No hay número de teléfono configurado para {canal.upper()}. "
-                               f"Ingresa el número en el campo de teléfono.",
-                    "contacto_usado": None,
-                }
+                prefs = await db["preferencias_notificacion"].find_one({"usuarioId": usuario_id}) or {}
+                if canal_actual == "whatsapp" and prefs.get("telefonoWhatsapp"):
+                    contacto = prefs["telefonoWhatsapp"]
+                elif canal_actual == "sms" and prefs.get("telefonoSms"):
+                    contacto = prefs["telefonoSms"]
+                else:
+                    return {
+                        "enviada": False,
+                        "canal": canal_actual,
+                        "detalle": f"No hay número de teléfono configurado para {canal_actual.upper()}.",
+                        "contacto_usado": None,
+                    }
 
-    # ── Ejecutar Factory Method + Adapter ────────────────────────────────
-    try:
-        # WhatsApp: forzar template si no viene en el request para evitar error 3016
         content_sid_final = (content_sid or "").strip()
         content_variables_final = (content_variables or "").strip()
-        if canal == "whatsapp" and not content_sid_final:
+        if canal_actual == "whatsapp" and not content_sid_final:
             content_sid_final = (getattr(configuracion, "twilio_whatsapp_content_sid", None) or "").strip()
             content_variables_final = (
                 getattr(configuracion, "twilio_whatsapp_content_variables", None) or ""
             ).strip()
-        if canal == "whatsapp" and content_sid_final:
+        if canal_actual == "whatsapp" and content_sid_final:
             clave_mensaje = (getattr(configuracion, "twilio_whatsapp_mensaje_key", None) or "1").strip()
             vars_dict = {}
             if content_variables_final:
@@ -204,7 +216,7 @@ async def enviar_notificacion_externa(
             vars_dict[clave_mensaje] = (mensaje or "").strip() or "Notificación TaskFlow"
             content_variables_final = json.dumps(vars_dict, ensure_ascii=False)
 
-        fabrica = _proveedor_notificacion.get(canal)
+        fabrica = _proveedor_notificacion.get(canal_actual)
         adapter = fabrica.get()
         solicitud = SolicitudNotificacion(
             destinatario=usuario.get("nombre", "Usuario"),
@@ -215,14 +227,12 @@ async def enviar_notificacion_externa(
             content_variables=content_variables_final,
         )
         respuesta = adapter.enviar(solicitud)
-
-        # Registrar como notificación interna
         await crear_notificacion_interna(
-            db, usuario_id,
-            f"[{canal.upper()}] {mensaje}",
+            db,
+            usuario_id,
+            f"[{canal_actual.upper()}] {mensaje}",
             "NOTIFICACION_EXTERNA",
         )
-
         return {
             "enviada":        respuesta.enviada,
             "canal":          respuesta.canal,
@@ -233,6 +243,18 @@ async def enviar_notificacion_externa(
             "codigo_error":   respuesta.codigo_error,
             "mensaje_error":  respuesta.mensaje_error,
         }
+
+    try:
+        for canal_actual in canales:
+            comando = ComandoGenerico(
+                descripcion=f"Enviar notificación externa por {canal_actual}",
+                operacion=lambda canal_actual=canal_actual: _enviar_canal(canal_actual),
+            )
+            resultados.append(await bus.ejecutar(comando))
+
+        if len(resultados) == 1:
+            return resultados[0]
+        return {"resultados": resultados}
     except ValueError as e:
         return {"enviada": False, "canal": canal, "detalle": str(e)}
     except Exception as e:

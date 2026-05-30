@@ -26,9 +26,6 @@
         <div class="card-t">
           <i class="ph ph-paper-plane-tilt" style="color: var(--a)"></i>
           Enviar notificación externa
-          <span class="badge ba" style="margin-left: 6px"
-            >Factory Method + Adapter</span
-          >
         </div>
         <div
           style="
@@ -38,8 +35,7 @@
             margin-bottom: 14px;
           "
         >
-          Selecciona un canal → el sistema instancia la fábrica concreta → crea
-          el adaptador → llama a la API externa.
+          Selecciona un canal y envía la notificación a través del servicio externo.
         </div>
 
         <!-- Selector de canal -->
@@ -56,7 +52,7 @@
                 style="font-size: 22px; color: var(--blue)"
               ></i>
               <div class="ncanal-nombre">Email</div>
-              <div class="ncanal-clase">EmailAdaptee</div>
+              <div class="ncanal-clase">Canal Email</div>
             </div>
             <div
               class="ncanal-opt"
@@ -68,7 +64,7 @@
                 style="font-size: 22px; color: var(--green)"
               ></i>
               <div class="ncanal-nombre">WhatsApp</div>
-              <div class="ncanal-clase">WhatsAppAdaptee</div>
+              <div class="ncanal-clase">Canal WhatsApp</div>
             </div>
             <div
               class="ncanal-opt"
@@ -80,12 +76,12 @@
                 style="font-size: 22px; color: var(--amber)"
               ></i>
               <div class="ncanal-nombre">SMS</div>
-              <div class="ncanal-clase">SmsAdaptee</div>
+              <div class="ncanal-clase">Canal SMS</div>
             </div>
           </div>
         </div>
 
-        <!-- Flujo visual del patrón -->
+        <!-- Flujo visual -->
         <div class="nflujo">
           <div class="nflujo-paso">
             <div class="nflujo-ico"><i class="ph ph-buildings"></i></div>
@@ -103,8 +99,8 @@
           <div class="nflujo-paso nflujo-factory">
             <div class="nflujo-ico"><i class="ph ph-factory"></i></div>
             <div>
-              <div class="nflujo-titulo">Factory Method</div>
-              <div class="nflujo-sub" id="nflujoFabrica">FabricaEmail</div>
+              <div class="nflujo-titulo">Origen</div>
+              <div class="nflujo-sub" id="nflujoFabrica">Canal Email</div>
             </div>
           </div>
           <i
@@ -114,8 +110,8 @@
           <div class="nflujo-paso nflujo-adapter">
             <div class="nflujo-ico"><i class="ph ph-plug"></i></div>
             <div>
-              <div class="nflujo-titulo">Adapter</div>
-              <div class="nflujo-sub" id="nflujoAdapter">EmailAdaptee</div>
+              <div class="nflujo-titulo">Interfaz</div>
+              <div class="nflujo-sub" id="nflujoAdapter">Canal Email</div>
             </div>
           </div>
           <i
@@ -126,7 +122,7 @@
             <div class="nflujo-ico"><i class="ph ph-cloud-arrow-up"></i></div>
             <div>
               <div class="nflujo-titulo">API Externa</div>
-              <div class="nflujo-sub" id="nflujoApi">EmailAPI</div>
+              <div class="nflujo-sub" id="nflujoApi">Email API</div>
             </div>
           </div>
         </div>

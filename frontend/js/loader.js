@@ -31,7 +31,7 @@ const PAGINAS_HTML = {
       <div class="login-stats">
         <div class="login-stat">
           <div class="login-stat-num" id="loginPatronesCount">—</div>
-          <div class="login-stat-label">Patrones de diseño</div>
+          <div class="login-stat-label">Tecnologías</div>
         </div>
         <div class="login-stat-sep"></div>
         <div class="login-stat">
@@ -100,7 +100,7 @@ const PAGINAS_HTML = {
       </div>
 
       <div class="login-footer">
-        Universidad Popular del Cesar · Patrones de Diseño 2026
+        Universidad Popular del Cesar · TaskFlow 2026
       </div>
     </div>
 
@@ -358,7 +358,7 @@ const PAGINAS_HTML = {
     <div class="card" id="proyJerarquiaCard">
       <div class="flex-between" style="margin-bottom:12px;gap:10px;flex-wrap:wrap">
         <div class="card-t" style="margin-bottom:0">
-          <i class="ph ph-tree-structure"></i> Estructura del proyecto — Composite
+          <i class="ph ph-tree-structure"></i> Estructura del proyecto
         </div>
         <div class="flex" style="gap:8px">
           <button class="btn btn-outline btn-xs" onclick="refrescarJerarquiaProyecto()">
@@ -408,7 +408,7 @@ const PAGINAS_HTML = {
   tareas: `<div class="pantalla" id="pantalla-tareas">
   <div class="page-wrap">
     <div class="page-head">
-      <div><div class="page-title">Tareas</div><div class="page-desc">Gestión y seguimiento de tareas (Builder + Composite + Decorator)</div></div>
+      <div><div class="page-title">Tareas</div><div class="page-desc">Gestión y seguimiento de tareas</div></div>
       <div class="flex" style="gap:8px;flex-wrap:wrap">
         <select class="fselect" id="selTareasProy" style="width:200px;padding:6px 10px" onchange="cargarTareasPaginadas(this.value,1)">
           <option value="">— Proyecto —</option>
@@ -722,10 +722,9 @@ const PAGINAS_HTML = {
         <div class="card-t">
           <i class="ph ph-paper-plane-tilt" style="color:var(--a)"></i>
           Enviar notificación externa
-          <span class="badge ba" style="margin-left:6px">Factory Method + Adapter</span>
         </div>
         <div style="font-size:12px;color:var(--t3);line-height:1.6;margin-bottom:14px">
-          Selecciona un canal → el sistema instancia la fábrica concreta → crea el adaptador → llama a la API externa.
+          Selecciona un canal y envía la notificación a través del servicio externo.
         </div>
 
         <!-- Selector de canal -->
@@ -735,22 +734,22 @@ const PAGINAS_HTML = {
             <div class="ncanal-opt activo" data-canal="email" onclick="notifSelCanal(this)">
               <i class="ph ph-envelope" style="font-size:22px;color:var(--blue)"></i>
               <div class="ncanal-nombre">Email</div>
-              <div class="ncanal-clase">EmailAdaptee</div>
+              <div class="ncanal-clase">Canal Email</div>
             </div>
             <div class="ncanal-opt" data-canal="whatsapp" onclick="notifSelCanal(this)">
               <i class="ph ph-chat-circle-dots" style="font-size:22px;color:var(--green)"></i>
               <div class="ncanal-nombre">WhatsApp</div>
-              <div class="ncanal-clase">WhatsAppAdaptee</div>
+              <div class="ncanal-clase">Canal WhatsApp</div>
             </div>
             <div class="ncanal-opt" data-canal="sms" onclick="notifSelCanal(this)">
               <i class="ph ph-device-mobile" style="font-size:22px;color:var(--amber)"></i>
               <div class="ncanal-nombre">SMS</div>
-              <div class="ncanal-clase">SmsAdaptee</div>
+              <div class="ncanal-clase">Canal SMS</div>
             </div>
           </div>
         </div>
 
-        <!-- Flujo visual del patrón -->
+        <!-- Flujo visual -->
         <div class="nflujo">
           <div class="nflujo-paso">
             <div class="nflujo-ico"><i class="ph ph-buildings"></i></div>
@@ -763,16 +762,16 @@ const PAGINAS_HTML = {
           <div class="nflujo-paso nflujo-factory">
             <div class="nflujo-ico"><i class="ph ph-factory"></i></div>
             <div>
-              <div class="nflujo-titulo">Factory Method</div>
-              <div class="nflujo-sub" id="nflujoFabrica">FabricaEmail</div>
+              <div class="nflujo-titulo">Origen</div>
+              <div class="nflujo-sub" id="nflujoFabrica">Canal Email</div>
             </div>
           </div>
           <i class="ph ph-arrow-right" style="color:var(--t4);font-size:14px"></i>
           <div class="nflujo-paso nflujo-adapter">
             <div class="nflujo-ico"><i class="ph ph-plug"></i></div>
             <div>
-              <div class="nflujo-titulo">Adapter</div>
-              <div class="nflujo-sub" id="nflujoAdapter">EmailAdaptee</div>
+              <div class="nflujo-titulo">Interfaz</div>
+              <div class="nflujo-sub" id="nflujoAdapter">Canal Email</div>
             </div>
           </div>
           <i class="ph ph-arrow-right" style="color:var(--t4);font-size:14px"></i>
@@ -780,7 +779,7 @@ const PAGINAS_HTML = {
             <div class="nflujo-ico"><i class="ph ph-cloud-arrow-up"></i></div>
             <div>
               <div class="nflujo-titulo">API Externa</div>
-              <div class="nflujo-sub" id="nflujoApi">EmailAPI</div>
+              <div class="nflujo-sub" id="nflujoApi">Email API</div>
             </div>
           </div>
         </div>
@@ -979,7 +978,7 @@ const PAGINAS_HTML = {
     <div class="page-head">
       <div>
         <div class="page-title">Configuración</div>
-        <div class="page-desc">Personalización y ajustes del sistema · <span class="badge bi">Abstract Factory</span></div>
+        <div class="page-desc">Personalización y ajustes del sistema</div>
       </div>
     </div>
 
@@ -987,7 +986,7 @@ const PAGINAS_HTML = {
     <div class="card mb16">
       <div class="perfil-section-title">
         <i class="ph ph-paint-brush" style="color:var(--a)"></i>
-        Tema visual — Patrón Abstract Factory
+        Tema visual
       </div>
       <div class="txt3 mb8" style="font-size:12px;line-height:1.6">
         Selecciona una familia de colores. El backend genera todas las variables CSS usando la fábrica correspondiente.
@@ -1109,8 +1108,8 @@ const PAGINAS_HTML = {
         <div class="config-info-item">
           <i class="ph ph-factory" style="color:var(--a)"></i>
           <div>
-            <div class="config-info-label">Patrón Abstract Factory</div>
-            <div class="config-info-val">3 fábricas concretas: Oscuro, Claro, Azul</div>
+            <div class="config-info-label">Tema visual</div>
+            <div class="config-info-val">3 estilos disponibles: Oscuro, Claro, Azul</div>
           </div>
         </div>
         <div class="config-info-item">

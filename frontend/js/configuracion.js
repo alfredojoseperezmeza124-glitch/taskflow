@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════
    TaskFlow — configuracion.js
    Sección de configuración del sistema.
-   Los temas se obtienen del backend vía Abstract Factory.
+   Los temas se obtienen del backend desde el backend.
    NO hay colores hardcodeados — todo viene de GET /temas
 ════════════════════════════════════════════════════ */
 
@@ -27,7 +27,7 @@ async function cargarConfiguracion() {
     if (el) el.style.display = esAdmin ? "" : "none";
   });
 
-  // Cargar temas desde el backend (Abstract Factory)
+  // Cargar temas desde el backend
   await _cargarTemasDesdeBackend();
 
   // Configuración del sistema (solo Admin)
@@ -52,7 +52,7 @@ async function cargarConfiguracion() {
   } catch (_) {}
 }
 
-/* ── CARGA DE TEMAS DESDE EL BACKEND (Abstract Factory) ── */
+/* ── CARGA DE TEMAS DESDE EL BACKEND ── */
 async function _cargarTemasDesdeBackend() {
   const grid = document.getElementById("temasGrid");
   if (!grid) return;

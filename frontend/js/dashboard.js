@@ -1717,7 +1717,7 @@ async function cargarTareasPaginadas(proyId, pagina) {
         <td>${t.estaVencida ? '<span class="badge br">Vencida</span>' : '<span class="badge bg">Activa</span>'}</td>
         <td><div class="flex" style="gap:4px">
           <button class="btn btn-outline btn-xs" onclick="abrirPanelComentarios('${t.id}','${t.titulo.replace(/'/g, "\\'")}')">💬</button>
-          <button class="btn btn-outline btn-xs" title="Subtareas y jerarquía (Builder + Composite)" onclick="abrirPanelSubtareas('${t.id}','${t.titulo.replace(/'/g, "\\'")}')"><i class="ph ph-tree-structure"></i></button>
+          <button class="btn btn-outline btn-xs" title="Subtareas y jerarquía" onclick="abrirPanelSubtareas('${t.id}','${t.titulo.replace(/'/g, "\\'")}')"><i class="ph ph-tree-structure"></i></button>
           <button class="btn btn-outline btn-xs" onclick="abrirEditarTarea('${t.id}')"><i class="ph ph-pencil-simple"></i></button>
           <button class="btn btn-outline btn-xs" onclick="abrirAsignar('${t.id}')">Asignar</button>
           <button class="btn btn-outline btn-xs" onclick="clonarTarea('${t.id}')">Clonar</button>

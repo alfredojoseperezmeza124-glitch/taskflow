@@ -694,8 +694,8 @@ async function cargarProyectos() {
               <i class="ph ph-stack"></i>
               ${
                 activos.length
-                  ? `<span class="badge bb" title="${activos.join(", ")}">Decorator ${activos.length}/3</span>`
-                  : '<span class="badge bi">Decorator 0/3</span>'
+                  ? `<span class="badge bb" title="${activos.join(", ")}">Reglas ${activos.length}</span>`
+                  : '<span class="badge bi">Reglas 0</span>'
               }
             </span>
           </div>
@@ -822,7 +822,7 @@ async function guardarReglasDecorador() {
       },
     });
     cerrarModal("mReglasDecorator");
-    toast("Reglas de Decorator actualizadas");
+    toast("Reglas actualizadas");
     if (
       document.querySelector(".pantalla.activa")?.id === "pantalla-proyectos"
     ) {
@@ -2361,13 +2361,13 @@ async function crearUsuario() {
 /* === NOTIFICACIONES EXTERNAS === */
 
 const _CANAL_INFO = {
-  email: { fabrica: "FabricaEmail", adapter: "EmailAdaptee", api: "EmailAPI" },
+  email: { fabrica: "Canal Email", adapter: "Canal Email", api: "Email API" },
   whatsapp: {
-    fabrica: "FabricaWhatsApp",
-    adapter: "WhatsAppAdaptee",
-    api: "WhatsAppAPI",
+    fabrica: "Canal WhatsApp",
+    adapter: "Canal WhatsApp",
+    api: "WhatsApp API",
   },
-  sms: { fabrica: "FabricaSms", adapter: "SmsAdaptee", api: "SmsAPI" },
+  sms: { fabrica: "Canal SMS", adapter: "Canal SMS", api: "SMS API" },
 };
 
 function seleccionarCanalNotif(el) {
@@ -2389,17 +2389,16 @@ function seleccionarCanalNotif(el) {
 
 /* ══════════════════════════════════════════════════
    NOTIFICACIONES EXTERNAS — Panel inline
-   Factory Method + Adapter
 ══════════════════════════════════════════════════ */
 
 const _NOTIF_FLOW = {
-  email: { fabrica: "FabricaEmail", adapter: "EmailAdaptee", api: "EmailAPI" },
+  email: { fabrica: "Canal Email", adapter: "Canal Email", api: "Email API" },
   whatsapp: {
-    fabrica: "FabricaWhatsApp",
-    adapter: "WhatsAppAdaptee",
-    api: "WhatsAppAPI",
+    fabrica: "Canal WhatsApp",
+    adapter: "Canal WhatsApp",
+    api: "WhatsApp API",
   },
-  sms: { fabrica: "FabricaSms", adapter: "SmsAdaptee", api: "SmsAPI" },
+  sms: { fabrica: "Canal SMS", adapter: "Canal SMS", api: "SMS API" },
 };
 
 function notifSelCanal(el) {

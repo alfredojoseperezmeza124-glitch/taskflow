@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════
    TaskFlow — subtareas.js
-   Panel de subtareas (Patrón Builder) +
-   Modal de envío de notificaciones externas (Adapter + Factory Method)
+   Panel de subtareas +
+   Modal de envío de notificaciones externas
 ════════════════════════════════════════════════════ */
 
 /* ══════════════════════════════════════════════════
@@ -44,7 +44,7 @@ function _htmlPanelSubtareas() {
 <div class="subtarea-drawer">
   <div class="subtarea-header">
     <div>
-      <div class="subtarea-label"><i class="ph ph-tree-structure"></i> Subtareas y jerarquía · Builder + Composite</div>
+      <div class="subtarea-label"><i class="ph ph-tree-structure"></i> Subtareas y jerarquía</div>
       <div class="subtarea-title" id="stTareaTitle">—</div>
     </div>
     <button class="btn btn-ghost btn-xs" onclick="cerrarPanelSubtareas()" style="font-size:18px">✕</button>
@@ -64,7 +64,7 @@ function _htmlPanelSubtareas() {
   >
     <div class="subtarea-form-title" style="margin-bottom:8px">
       <i class="ph ph-flow-arrow" style="color:var(--a)"></i>
-      Vista jerárquica — Composite
+      Vista jerárquica
     </div>
     <div id="stCompositeResumen" class="txt3" style="font-size:11px">—</div>
     <div id="stCompositeTree" style="margin-top:10px"></div>
@@ -75,7 +75,7 @@ function _htmlPanelSubtareas() {
   </div>
 
   <div class="subtarea-form">
-    <div class="subtarea-form-title"><i class="ph ph-plus-circle" style="color:var(--a)"></i> Nueva subtarea — Builder</div>
+    <div class="subtarea-form-title"><i class="ph ph-plus-circle" style="color:var(--a)"></i> Nueva subtarea</div>
     <div class="fg" style="margin-bottom:8px">
       <input class="finput" id="stNuevoTitulo" placeholder="Título de la subtarea..."
         onkeydown="if(event.key==='Enter')crearSubtarea()">
@@ -147,7 +147,7 @@ function _renderizarSubtareas(subtareas) {
   if (!subtareas.length) {
     lista.innerHTML = `<div class="vacío" style="padding:32px 16px">
       <i class="ph ph-tree-structure" style="font-size:36px;display:block;margin-bottom:10px;opacity:.2"></i>
-      Sin subtareas. Usa el Builder para crear la primera.
+      Sin subtareas. Crea la primera para empezar.
     </div>`;
     if (wrap) wrap.style.display = "none";
     return;
@@ -234,7 +234,7 @@ async function crearSubtarea() {
     document
       .querySelectorAll("#stRespLista .resp-chip")
       .forEach((c) => c.classList.remove("sel"));
-    toast("Subtarea creada — Builder");
+    toast("Subtarea creada");
     await _cargarSubtareas(_subtareasTareaId);
   } catch (e) {
     if (errEl) errEl.textContent = e.message;
@@ -354,7 +354,7 @@ function _renderizarJerarquiaCompuesta(jerarquia) {
 }
 
 /* ══════════════════════════════════════════════════
-   NOTIFICACIONES EXTERNAS — Modal Factory + Adapter
+   NOTIFICACIONES EXTERNAS — Modal de envío externo
 ══════════════════════════════════════════════════ */
 
 let _notifDestinatarios = [];
@@ -381,24 +381,24 @@ function _htmlModalNotifExterna() {
   <div class="flex-between" style="margin-bottom:6px">
     <div class="modal-t" style="margin-bottom:0">
       <i class="ph ph-paper-plane-right" style="color:var(--a)"></i>
-      Enviar notificacion externa — Adapter + Factory Method
+      Enviar notificación externa
     </div>
     <button class="btn btn-ghost btn-xs" onclick="cerrarModal('mNotifExterna')">✕</button>
   </div>
 
   <div style="background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);padding:10px 12px;margin-bottom:16px">
     <div style="font-size:11px;color:var(--t3);font-family:var(--mono);line-height:1.6">
-      <strong style="color:var(--a2)">Factory Method + Adapter:</strong>
-      ProveedorNotificacion → Fabrica concreta → Adaptador → API externa
+      <strong style="color:var(--a2)">Flujo de notificación:</strong>
+      Proveedor → Origen → Interfaz → API externa
     </div>
     <div style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap">
-      <span style="font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px;background:var(--s3);color:var(--t3);border:1px solid var(--b1)">ProveedorNotificacion</span>
+      <span style="font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px;background:var(--s3);color:var(--t3);border:1px solid var(--b1)">Proveedor</span>
       <span style="color:var(--t3);font-size:12px">→</span>
-      <span id="flowFabrica" style="font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px;background:var(--abg);color:var(--a2);border:1px solid rgba(108,99,255,.3)">FabricaEmail</span>
+      <span id="flowFabrica" style="font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px;background:var(--abg);color:var(--a2);border:1px solid rgba(108,99,255,.3)">Canal Email</span>
       <span style="color:var(--t3);font-size:12px">→</span>
-      <span id="flowAdapter" style="font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px;background:var(--amberbg);color:var(--amber);border:1px solid rgba(251,191,36,.3)">EmailAdaptee</span>
+      <span id="flowAdapter" style="font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px;background:var(--amberbg);color:var(--amber);border:1px solid rgba(251,191,36,.3)">Canal Email</span>
       <span style="color:var(--t3);font-size:12px">→</span>
-      <span id="flowApi" style="font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px;background:var(--greenbg);color:var(--green);border:1px solid rgba(52,211,153,.3)">EmailAPI</span>
+      <span id="flowApi" style="font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px;background:var(--greenbg);color:var(--green);border:1px solid rgba(52,211,153,.3)">Email API</span>
     </div>
   </div>
 
@@ -455,13 +455,13 @@ function _htmlModalNotifExterna() {
 }
 
 const _FLOW_MAP = {
-  email: { fabrica: "FabricaEmail", adapter: "EmailAdaptee", api: "EmailAPI" },
+  email: { fabrica: "Canal Email", adapter: "Canal Email", api: "Email API" },
   whatsapp: {
-    fabrica: "FabricaWhatsApp",
-    adapter: "WhatsAppAdaptee",
-    api: "WhatsAppAPI",
+    fabrica: "Canal WhatsApp",
+    adapter: "Canal WhatsApp",
+    api: "WhatsApp API",
   },
-  sms: { fabrica: "FabricaSms", adapter: "SmsAdaptee", api: "SmsAPI" },
+  sms: { fabrica: "Canal SMS", adapter: "Canal SMS", api: "SMS API" },
 };
 
 function _selCanalNotif(btn) {
@@ -618,7 +618,7 @@ function _mostrarResultadoNotifModal(resultados) {
   resEl.style.display = "";
   resEl.innerHTML = `
     <div style="background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);padding:10px 12px">
-      <div style="font-size:11px;font-weight:600;color:var(--t2);margin-bottom:8px;font-family:var(--mono)">RESULTADO DEL ADAPTER</div>
+      <div style="font-size:11px;font-weight:600;color:var(--t2);margin-bottom:8px;font-family:var(--mono)">Resultado del canal</div>
       ${resultados
         .map(
           (r) => `

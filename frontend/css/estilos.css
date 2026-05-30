@@ -3515,7 +3515,7 @@ tr:hover td {
 }
 
 /* ══════════════════════════════════════════════════════
-   NOTIFICACIONES EXTERNAS — Factory Method + Adapter
+   NOTIFICACIONES EXTERNAS — Flujo externo
 ══════════════════════════════════════════════════════ */
 .notif-canales {
   display: grid;
@@ -3553,7 +3553,7 @@ tr:hover td {
   font-family: var(--mono);
 }
 
-/* Flujo visual del patrón */
+/* Flujo visual */
 .notif-flujo {
   display: flex;
   align-items: center;
@@ -3669,7 +3669,7 @@ tr:hover td {
   font-family: var(--mono);
 }
 
-/* Flujo visual del patrón */
+/* Flujo visual */
 .nflujo {
   display: flex;
   align-items: center;
