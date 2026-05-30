@@ -3,13 +3,6 @@ PATRÓN ADAPTER — INotificacionAdapter
 Define la interfaz común que todos los adaptadores de notificación deben implementar.
 Cada canal externo (WhatsApp API, Email API, SMS API) tiene su propio formato,
 y el Adapter traduce nuestra solicitud estándar al formato que cada API entiende.
-
-Equivalente a IBankAdapter del ejemplo bancario:
-  IBankAdapter          → INotificacionAdapter
-  BankCreditRequest     → SolicitudNotificacion
-  BankCreditResponse    → RespuestaNotificacion
-  XBankAdaptee          → WhatsAppAdaptee
-  YBankAdaptee          → EmailAdaptee
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
