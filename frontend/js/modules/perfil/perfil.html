@@ -1,0 +1,78 @@
+<!-- ═══════════════════════════════════════════════════
+   TaskFlow — modules/perfil/perfil.html
+   Template HTML del módulo Perfil.
+   Extraído de loader.js.
+════════════════════════════════════════════════════ -->
+<div class="pantalla" id="pantalla-perfil">
+  <div class="perfil-wrap">
+
+    <!-- Columna izquierda: avatar + info -->
+    <div class="perfil-sidebar">
+      <div class="card perfil-avatar-card">
+        <label class="avatar-upload perfil-avatar-upload" title="Cambiar foto">
+          <img id="perAvatarImg" src="" alt="avatar" class="perfil-foto" style="display:none">
+          <div class="perfil-avatar-inic avatar" id="perAvatarInic">--</div>
+          <div class="perfil-avatar-overlay">
+            <i class="ph ph-camera"></i>
+            <span>Cambiar foto</span>
+          </div>
+          <input type="file" id="perAvatarFile" accept="image/png,image/jpeg,image/webp" onchange="previsualizarAvatar(this)">
+        </label>
+        <div class="perfil-nombre" id="perNombreDisplay">—</div>
+        <div class="flex" style="justify-content:center;gap:6px;margin:4px 0 8px">
+          <span class="badge bm" id="perRolDisplay">—</span>
+        </div>
+        <div class="perfil-email" id="perEmailDisplay">—</div>
+        <div class="sep"></div>
+        <div class="perfil-stat-row">
+          <div class="perfil-stat"><div class="perfil-stat-v" id="perStProyectos">—</div><div class="perfil-stat-l">Proyectos</div></div>
+          <div class="perfil-stat-div"></div>
+          <div class="perfil-stat"><div class="perfil-stat-v" id="perStTareas">—</div><div class="perfil-stat-l">Tareas</div></div>
+          <div class="perfil-stat-div"></div>
+          <div class="perfil-stat"><div class="perfil-stat-v" id="perStAcceso">—</div><div class="perfil-stat-l">Último acceso</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Columna derecha: formulario -->
+    <div class="perfil-main">
+
+      <div class="card mb16">
+        <div class="perfil-section-title"><i class="ph ph-user-circle" style="color:var(--a)"></i> Información personal</div>
+        <div class="frow">
+          <div class="fg">
+            <label class="flabel">Nombre completo</label>
+            <input class="finput" id="perNombre" placeholder="Tu nombre completo">
+          </div>
+          <div class="fg">
+            <label class="flabel">URL de avatar (opcional)</label>
+            <input class="finput" id="perAvatarUrl" placeholder="https://..." oninput="previsualizarAvatarUrl(this.value)">
+          </div>
+        </div>
+        <div class="fg">
+          <label class="flabel">Descripción / Bio</label>
+          <textarea class="ftextarea" id="perDesc" placeholder="Cuéntanos algo sobre ti..." style="min-height:80px"></textarea>
+        </div>
+        <div class="ferror" id="perError"></div>
+        <div class="flex" style="justify-content:flex-end">
+          <button class="btn btn-primary" onclick="guardarPerfil()">
+            <i class="ph ph-floppy-disk"></i> Guardar cambios
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="perfil-section-title"><i class="ph ph-shield-check" style="color:var(--green)"></i> Seguridad de cuenta</div>
+        <div class="perfil-info-row"><i class="ph ph-envelope" style="color:var(--t3)"></i><div><div class="perfil-info-label">Correo electrónico</div><div class="perfil-info-val" id="perEmailSeg">—</div></div></div>
+        <div class="perfil-info-row"><i class="ph ph-identification-card" style="color:var(--t3)"></i><div><div class="perfil-info-label">Rol en el sistema</div><div class="perfil-info-val" id="perRolSeg">—</div></div></div>
+        <div class="perfil-info-row"><i class="ph ph-clock" style="color:var(--t3)"></i><div><div class="perfil-info-label">Miembro desde</div><div class="perfil-info-val" id="perFechaReg">—</div></div></div>
+        <div class="sep"></div>
+        <div class="flex-between">
+          <div class="txt2" style="font-size:12px">El cambio de contraseña y correo se gestionan desde el panel de administración.</div>
+          <span class="badge bg"><i class="ph ph-lock-key"></i> Cuenta activa</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

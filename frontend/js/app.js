@@ -1,36 +1,34 @@
 /* ═══════════════════════════════════════════════════
    TaskFlow — app.js
-   Estado global, HTTP, utilidades, navegación, auth, tema
-   ACTUALIZADO: conecta SSE al iniciar sesión
+   Inicialización principal, gestión de tema, sidebar,
+   tabla-cards y navegación delegada en módulos.
 ════════════════════════════════════════════════════ */
 
-const API = window.API_URL || "http://localhost:8000/api/v1";
+"use strict";
+
+// Variables globales para retrocompatibilidad
 let S = null;
 let proyActualId = null;
 let colsActuales = [];
 let miembrosActuales = [];
-const _cacheEstructuraProyecto = new Map();
+
 const MOBILE_SIDEBAR_BREAKPOINT = 900;
 let _obsTablasTarjeta = null;
 let _rafTablasTarjeta = null;
 
-/* ── HTTP ── */
-async function api(met, ruta, body = null, token = true) {
-  const h = { "Content-Type": "application/json" };
-  if (token && S?.token_acceso) h["Authorization"] = `Bearer ${S.token_acceso}`;
-  const r = await fetch(`${API}${ruta}`, {
-    method: met,
-    headers: h,
-    body: body ? JSON.stringify(body) : null,
-  });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.detail || "Error en la solicitud");
-  return d;
+/* ── Sincronizar estado global con TF.state ── */
+function sincronizarConEstado() {
+  const state = window.TF.state;
+  S = state.getSesion();
+  proyActualId = state.getProyActualId();
+  colsActuales = state.getColsActuales();
+  miembrosActuales = state.getMiembros();
 }
 
 /* ── TOAST ── */
 function toast(msg, tipo = "ok") {
   const w = document.getElementById("toastWrap");
+  if (!w) return;
   const t = document.createElement("div");
   t.className = `toast ${tipo}`;
   t.textContent = msg;
@@ -40,10 +38,13 @@ function toast(msg, tipo = "ok") {
 
 /* ── MODALES ── */
 function abrirModal(id) {
-  document.getElementById(id).classList.add("open");
+  const el = document.getElementById(id);
+  if (el) el.classList.add("open");
 }
+
 function cerrarModal(id) {
-  document.getElementById(id).classList.remove("open");
+  const el = document.getElementById(id);
+  if (el) el.classList.remove("open");
 }
 
 function toggleVerPass() {
@@ -52,11 +53,14 @@ function toggleVerPass() {
   if (!campo) return;
   if (campo.type === "password") {
     campo.type = "text";
-    if (btn)
+    if (btn) {
       btn.innerHTML = '<i class="ph ph-eye-slash" style="font-size:16px"></i>';
+    }
   } else {
     campo.type = "password";
-    if (btn) btn.innerHTML = '<i class="ph ph-eye" style="font-size:16px"></i>';
+    if (btn) {
+      btn.innerHTML = '<i class="ph ph-eye" style="font-size:16px"></i>';
+    }
   }
 }
 
@@ -65,11 +69,12 @@ function aplicarTema(tema) {
   document.documentElement.setAttribute("data-tema", tema);
   localStorage.setItem("tf_tema", tema);
   const btn = document.getElementById("btnTema");
-  if (btn)
+  if (btn) {
     btn.innerHTML =
       tema === "claro"
         ? '<i class="ph ph-moon"></i>'
         : '<i class="ph ph-sun"></i>';
+  }
 }
 
 function toggleTema() {
@@ -117,7 +122,7 @@ function _restaurarEstadoSidebar() {
   _aplicarSidebarColapsado(guardado);
 }
 
-/* ── TABLAS EN TARJETAS ── */
+/* ── TABLAS EN TARJETAS (RESPONSIVE) ── */
 function _aplicarTablasComoTarjetas() {
   document.querySelectorAll(".tabla-wrap table").forEach((tabla) => {
     tabla.classList.add("tabla-cards");
@@ -177,7 +182,13 @@ function mostrarPantalla(nombre) {
   document
     .querySelectorAll(".nav-item")
     .forEach((n) => n.classList.remove("activo"));
-  document.getElementById(`pantalla-${nombre}`)?.classList.add("activa");
+  
+  const targetSlot = document.getElementById(`slot-${nombre}`);
+  if (targetSlot) {
+    const p = targetSlot.querySelector(".pantalla");
+    if (p) p.classList.add("activa");
+  }
+
   document.querySelector(`[data-p="${nombre}"]`)?.classList.add("activo");
   const bc = document.getElementById("topBreadcrumb");
   const etiquetas = {
@@ -194,46 +205,32 @@ function mostrarPantalla(nombre) {
     configuracion: "Configuración",
   };
   if (bc) bc.textContent = etiquetas[nombre] || "";
-  _limpiarPantalla(nombre);
   _cerrarSidebarMovil();
   _programarTablasComoTarjetas();
 
-  const acc = {
-    dashboard: cargarDashboard,
-    proyectos: cargarProyectos,
-    tablero: async () => {
-      await cargarSelectores();
-      _inicializarTablero();
-    },
-    tareas: async () => {
-      await cargarSelectores();
-      _inicializarTareas();
-    },
-    usuarios: cargarUsuarios,
-    reportes: async () => {
-      await cargarSelectores();
-      inicializarTabsReporte();
-    },
-    historial: cargarSelectores,
-    notificaciones: () => {
-      cargarNotificaciones();
-      cargarTodasNotificaciones();
-    },
-    perfil: cargarPerfil,
-    configuracion: () => {
-      const check = document.getElementById("pantalla-configuracion");
-      if (!check || check.children.length === 0) {
-        setTimeout(() => cargarConfiguracion(), 100);
-        return;
-      }
-      cargarConfiguracion();
-    },
-  };
-  acc[nombre]?.();
+  // Llamar al init() o cargador del módulo correspondiente
+  const modulo = window.TF.moduleLoader.obtener(nombre);
+  if (modulo && typeof modulo.init === "function") {
+    modulo.init();
+  } else {
+    // Si no está registrado en el moduleLoader, verificar funciones globales legacy
+    const acc = {
+      tablero: async () => {
+        if (window.cargarSelectores) await window.cargarSelectores();
+        if (window._inicializarTablero) window._inicializarTablero();
+      },
+      tareas: async () => {
+        if (window.cargarSelectores) await window.cargarSelectores();
+        if (window._inicializarTareas) window._inicializarTareas();
+      },
+    };
+    acc[nombre]?.();
+  }
 }
 
 /* ── UI TRAS LOGIN ── */
 function actualizarUI() {
+  sincronizarConEstado();
   if (!S) return;
   const rol = S.usuario.rol;
   const u = S.usuario;
@@ -246,29 +243,43 @@ function actualizarUI() {
   );
 
   const topAv = document.getElementById("topAvatar");
-  if (u.avatarUri) {
-    topAv.innerHTML = `<img src="${u.avatarUri}" style="width:22px;height:22px;border-radius:50%;object-fit:cover" onerror="this.style.display='none'">`;
-  } else {
-    topAv.textContent = inic(u.nombre);
+  if (topAv) {
+    if (u.avatarUri) {
+      topAv.innerHTML = `<img src="${u.avatarUri}" style="width:22px;height:22px;border-radius:50%;object-fit:cover" onerror="this.style.display='none'">`;
+    } else {
+      topAv.textContent = inic(u.nombre);
+    }
   }
 
-  document.getElementById("topNombre").textContent = u.nombre;
-  document.getElementById("topRolBadge").textContent = rol;
+  const topNombre = document.getElementById("topNombre");
+  if (topNombre) topNombre.textContent = u.nombre;
 
-  document.getElementById("navUsuarios").style.display =
-    rol === "ADMIN" ? "" : "none";
-  document.getElementById("navRegistrar").style.display =
-    rol === "ADMIN" ? "" : "none";
-  document.getElementById("navNotificaciones").style.display = "";
-  document.getElementById("btnNotif").style.display = "";
+  const topRol = document.getElementById("topRolBadge");
+  if (topRol) topRol.textContent = rol;
+
+  const navUs = document.getElementById("navUsuarios");
+  if (navUs) navUs.style.display = rol === "ADMIN" ? "" : "none";
+
+  const navReg = document.getElementById("navRegistrar");
+  if (navReg) navReg.style.display = rol === "ADMIN" ? "" : "none";
+
+  const navNot = document.getElementById("navNotificaciones");
+  if (navNot) navNot.style.display = "";
+
+  const btnNot = document.getElementById("btnNotif");
+  if (btnNot) btnNot.style.display = "";
+
   const btnSidebar = document.getElementById("btnSidebarToggle");
   if (btnSidebar) btnSidebar.style.display = "";
 
-  document.getElementById("app").classList.remove("sin-sidebar");
-  _restaurarEstadoSidebar();
+  const app = document.getElementById("app");
+  if (app) {
+    app.classList.remove("sin-sidebar");
+    _restaurarEstadoSidebar();
+  }
 }
 
-/* ── HELPERS ── */
+/* ── HELPERS LEGACY COMPAT ── */
 function inic(n = "") {
   return (
     n
@@ -321,12 +332,14 @@ function colPrio(p) {
   return m[p] || "p-baja";
 }
 
+/* ── CACHE ESTRUCTURA PROYECTO ── */
 async function cargarEstructuraProyecto(proyectoId, forzar = false) {
   if (!proyectoId) {
     return { fases: [], fasesPorId: {}, etapasPorFase: {}, etapasPorId: {} };
   }
-  if (!forzar && _cacheEstructuraProyecto.has(proyectoId)) {
-    return _cacheEstructuraProyecto.get(proyectoId);
+  const state = window.TF.state;
+  if (!forzar && state.getCacheEstructura(proyectoId)) {
+    return state.getCacheEstructura(proyectoId);
   }
 
   const [fases, jerarquia] = await Promise.all([
@@ -363,16 +376,12 @@ async function cargarEstructuraProyecto(proyectoId, forzar = false) {
   });
 
   const estructura = { fases: fasesLista, fasesPorId, etapasPorFase, etapasPorId };
-  _cacheEstructuraProyecto.set(proyectoId, estructura);
+  state.setCacheEstructura(proyectoId, estructura);
   return estructura;
 }
 
 function invalidarCacheEstructuraProyecto(proyectoId = null) {
-  if (proyectoId) {
-    _cacheEstructuraProyecto.delete(proyectoId);
-    return;
-  }
-  _cacheEstructuraProyecto.clear();
+  window.TF.state.invalidarCacheEstructura(proyectoId);
 }
 
 function resolverContextoEstructura(estructura, faseId, etapaId) {
@@ -386,25 +395,36 @@ function resolverContextoEstructura(estructura, faseId, etapaId) {
 /* ── AUTENTICACIÓN ── */
 async function iniciarSesion() {
   const btn = document.getElementById("btnLogin");
-  document.getElementById("lError").textContent = "";
-  const email = document.getElementById("lEmail").value.trim();
-  const pass = document.getElementById("lPass").value;
+  const errEl = document.getElementById("lError");
+  if (errEl) errEl.textContent = "";
+  
+  const email = document.getElementById("lEmail")?.value?.trim();
+  const pass = document.getElementById("lPass")?.value;
   if (!email || !pass) {
-    document.getElementById("lError").textContent = "Completa todos los campos";
+    if (errEl) errEl.textContent = "Completa todos los campos";
     return;
   }
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Entrando...';
   try {
-    S = await api(
+    const rawS = await api(
       "POST",
       "/usuarios/login",
       { email, contrasena: pass },
       false,
     );
-    localStorage.setItem("tf_s", JSON.stringify(S));
+    
+    // Aplicar adapter
+    const adapter = window.TF.modules.loginAdapter;
+    S = adapter ? adapter.adapt(rawS) : rawS;
+    
+    // Guardar en el estado central
+    window.TF.state.setSesion(S);
+    window.TF.state.guardarSesion();
+    
     const overlay = document.getElementById("loginOverlay");
     if (overlay) overlay.classList.add("oculto");
+    
     actualizarUI();
     mostrarPantalla("dashboard");
 
@@ -415,7 +435,8 @@ async function iniciarSesion() {
 
     try {
       const ns = await api("GET", "/notificaciones/");
-      const noLeidas = ns.filter((n) => !n.leida).length;
+      const adaptado = adapter ? adapter.adaptNotificaciones(ns) : null;
+      const noLeidas = adaptado ? adaptado.noLeidas : ns.filter((n) => !n.leida).length;
       actualizarBadgeNotif(noLeidas);
       setTimeout(() => {
         if (noLeidas > 0) {
@@ -430,7 +451,7 @@ async function iniciarSesion() {
       toast(`Bienvenido, ${S.usuario.nombre}`);
     }
   } catch (e) {
-    document.getElementById("lError").textContent = e.message;
+    if (errEl) errEl.textContent = e.message;
   } finally {
     btn.disabled = false;
     btn.innerHTML = "Iniciar sesión";
@@ -438,17 +459,14 @@ async function iniciarSesion() {
 }
 
 function cerrarSesion() {
-  // Desconectar SSE
-  if (typeof window._desconectarStreamSSE === "function")
+  if (typeof window._desconectarStreamSSE === "function") {
     window._desconectarStreamSSE();
+  }
 
-  S = null;
-  proyActualId = null;
-  colsActuales = [];
-  miembrosActuales = [];
+  window.TF.state.limpiarSesion();
+  sincronizarConEstado();
+
   if (typeof _cacheUsuarios !== "undefined") _cacheUsuarios = null;
-  invalidarCacheEstructuraProyecto();
-  localStorage.removeItem("tf_s");
 
   [
     "sidebar",
@@ -461,11 +479,17 @@ function cerrarSesion() {
     const el = document.getElementById(id);
     if (el) el.style.display = "none";
   });
-  document.getElementById("app").classList.add("sin-sidebar");
-  document.getElementById("app").classList.remove("sidebar-collapsed");
-  document.getElementById("app").classList.remove("mobile-sidebar-open");
+  
+  const app = document.getElementById("app");
+  if (app) {
+    app.classList.add("sin-sidebar");
+    app.classList.remove("sidebar-collapsed");
+    app.classList.remove("mobile-sidebar-open");
+  }
+
   const btnSidebar = document.getElementById("btnSidebarToggle");
   if (btnSidebar) btnSidebar.style.display = "none";
+  
   document
     .querySelectorAll(".nav-item")
     .forEach((n) => n.classList.remove("activo"));
@@ -483,29 +507,6 @@ function cerrarSesion() {
   toast("Sesión cerrada");
 }
 
-async function crearUsuario() {
-  document.getElementById("rError").textContent = "";
-  try {
-    await api(
-      "POST",
-      "/usuarios/registro",
-      {
-        nombre: document.getElementById("rNombre").value,
-        email: document.getElementById("rEmail").value,
-        contrasena: document.getElementById("rPass").value,
-        rol: document.getElementById("rRol").value,
-      },
-      false,
-    );
-    toast("Usuario creado correctamente");
-    ["rNombre", "rEmail", "rPass"].forEach(
-      (id) => (document.getElementById(id).value = ""),
-    );
-  } catch (e) {
-    document.getElementById("rError").textContent = e.message;
-  }
-}
-
 /* ── NOTIF BADGE ── */
 function actualizarBadgeNotif(n) {
   const b = document.getElementById("badgeNotif");
@@ -514,24 +515,22 @@ function actualizarBadgeNotif(n) {
   b.textContent = n;
 }
 
-/* ── LIMPIEZA ── */
-function _limpiarPantalla(pantallaNueva) {
-  // placeholder para futura lógica de limpieza
-}
-
 function _inicializarTablero() {
   const sel = document.getElementById("selPT");
   if (!sel) return;
   if (sel.value) {
-    proyActualId = sel.value;
-    cargarTablero(proyActualId);
+    window.TF.state.setProyActualId(sel.value);
+    sincronizarConEstado();
+    if (window.cargarTablero) window.cargarTablero(proyActualId);
   } else {
-    proyActualId = null;
-    colsActuales = [];
+    window.TF.state.setProyActualId(null);
+    window.TF.state.setColsActuales([]);
+    sincronizarConEstado();
     const board = document.getElementById("kanbanBoard");
-    if (board)
+    if (board) {
       board.innerHTML =
         '<div class="vacío" style="width:100%">Selecciona un proyecto para ver el tablero</div>';
+    }
     const bc = document.getElementById("tBreadcrumb");
     if (bc) bc.textContent = "";
   }
@@ -542,17 +541,18 @@ function _inicializarTareas() {
   if (!sel) return;
   if (proyActualId && [...sel.options].some((o) => o.value === proyActualId)) {
     sel.value = proyActualId;
-    cargarTareasPaginadas(proyActualId, 1);
+    if (window.cargarTareasPaginadas) window.cargarTareasPaginadas(proyActualId, 1);
   } else if (sel.value) {
-    cargarTareasPaginadas(sel.value, 1);
+    if (window.cargarTareasPaginadas) window.cargarTareasPaginadas(sel.value, 1);
   } else if (sel.options.length > 1) {
     sel.selectedIndex = 1;
-    cargarTareasPaginadas(sel.value, 1);
+    if (window.cargarTareasPaginadas) window.cargarTareasPaginadas(sel.value, 1);
   } else {
     const tb = document.getElementById("tbTareas");
-    if (tb)
+    if (tb) {
       tb.innerHTML =
         '<tr><td colspan="7" class="vacío">Selecciona un proyecto para ver las tareas</td></tr>';
+    }
   }
 }
 
@@ -561,7 +561,7 @@ async function actualizarStatsLogin() {
   const el = document.getElementById("loginPatronesCount");
   if (!el) return;
   try {
-    const r = await fetch(`${API}/openapi.json`, { method: "GET" });
+    const r = await fetch(`${window.TF.apiClient.API_URL}/openapi.json`, { method: "GET" });
     if (!r.ok) throw new Error("No se pudo leer OpenAPI");
     const schema = await r.json();
     const descripcion = schema?.info?.description || "";
@@ -577,41 +577,44 @@ async function actualizarStatsLogin() {
 /* ── INIT ── */
 (function init() {
   document.addEventListener("taskflow:ready", () => {
+    // Restaurar tema guardado
     const temaGuardado = localStorage.getItem("tf_tema") || "oscuro";
     aplicarTema(temaGuardado);
 
+    // Event listeners para overlays de modales
     document.querySelectorAll(".overlay").forEach((o) =>
       o.addEventListener("click", (e) => {
         if (e.target === o) o.classList.remove("open");
       }),
     );
 
-    document.getElementById("app").classList.add("sin-sidebar");
+    const app = document.getElementById("app");
+    if (app) app.classList.add("sin-sidebar");
 
-    const saved = localStorage.getItem("tf_s");
-    if (saved) {
-      try {
-        S = JSON.parse(saved);
-        const overlay = document.getElementById("loginOverlay");
-        if (overlay) overlay.classList.add("oculto");
-        actualizarUI();
-        mostrarPantalla("dashboard");
+    // Intentar restaurar sesión activa
+    if (window.TF.state.restaurarSesion()) {
+      sincronizarConEstado();
+      const overlay = document.getElementById("loginOverlay");
+      if (overlay) overlay.classList.add("oculto");
+      actualizarUI();
+      mostrarPantalla("dashboard");
 
-        // Reconectar SSE al recargar página con sesión activa
-        setTimeout(() => {
-          if (typeof window._conectarStreamSSE === "function")
-            window._conectarStreamSSE();
-        }, 1000);
-      } catch {
-        localStorage.removeItem("tf_s");
-      }
+      // Reconectar SSE al recargar página con sesión activa
+      setTimeout(() => {
+        if (typeof window._conectarStreamSSE === "function") {
+          window._conectarStreamSSE();
+        }
+      }, 1000);
     }
 
     document.getElementById("lPass")?.addEventListener("keydown", (e) => {
       if (e.key === "Enter") iniciarSesion();
     });
+    
     document.getElementById("colNombre")?.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") confirmarAgregarColumna();
+      if (e.key === "Enter" && typeof window.confirmarAgregarColumna === "function") {
+        window.confirmarAgregarColumna();
+      }
     });
 
     const hoy = new Date().toISOString().split("T")[0];
@@ -620,9 +623,11 @@ async function actualizarStatsLogin() {
 
     window.addEventListener("resize", _restaurarEstadoSidebar);
     window.addEventListener("orientationchange", _restaurarEstadoSidebar);
+    
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") _cerrarSidebarMovil();
     });
+    
     document.addEventListener("click", (e) => {
       const app = document.getElementById("app");
       if (!app || !app.classList.contains("mobile-sidebar-open")) return;
@@ -632,8 +637,8 @@ async function actualizarStatsLogin() {
       if (sidebar?.contains(target) || btnSidebar?.contains(target)) return;
       _cerrarSidebarMovil();
     });
+    
     _iniciarObserverTablasTarjeta();
-
     actualizarStatsLogin();
   });
 })();

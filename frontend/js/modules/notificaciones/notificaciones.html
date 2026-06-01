@@ -1,0 +1,201 @@
+<!-- ═══════════════════════════════════════════════════
+   TaskFlow — modules/notificaciones/notificaciones.html
+   Template HTML del módulo Notificaciones.
+   Extraído de loader.js.
+════════════════════════════════════════════════════ -->
+<div class="pantalla" id="pantalla-notificaciones">
+  <div class="page-wrap">
+
+    <div class="page-head">
+      <div>
+        <div class="page-title">Notificaciones</div>
+        <div class="page-desc" id="notifDesc"><i class="ph ph-bell" style="font-size:13px"></i> Alertas y avisos del sistema</div>
+      </div>
+      <div class="flex" style="gap:8px">
+        <button class="btn btn-outline btn-sm" id="btnMarcarLeidas" onclick="marcarTodasLeidas()" style="display:none">
+          <i class="ph ph-checks"></i> Marcar todas leídas
+        </button>
+      </div>
+    </div>
+
+    <!-- PANEL ENVÍO EXTERNO — visible para Admin y PM -->
+    <div id="panelEnvioExterno" style="display:none" class="mb16">
+      <div class="card">
+        <div class="card-t">
+          <i class="ph ph-paper-plane-tilt" style="color:var(--a)"></i>
+          Enviar notificación externa
+        </div>
+        <div style="font-size:12px;color:var(--t3);line-height:1.6;margin-bottom:14px">
+          Selecciona un canal y envía la notificación a través del servicio externo.
+        </div>
+
+        <!-- Selector de canal -->
+        <div class="fg">
+          <label class="flabel">Canal de envío</label>
+          <div class="ncanal-grid" id="ncanalGrid">
+            <div class="ncanal-opt activo" data-canal="email" onclick="notifSelCanal(this)">
+              <i class="ph ph-envelope" style="font-size:22px;color:var(--blue)"></i>
+              <div class="ncanal-nombre">Email</div>
+              <div class="ncanal-clase">Canal Email</div>
+            </div>
+            <div class="ncanal-opt" data-canal="whatsapp" onclick="notifSelCanal(this)">
+              <i class="ph ph-chat-circle-dots" style="font-size:22px;color:var(--green)"></i>
+              <div class="ncanal-nombre">WhatsApp</div>
+              <div class="ncanal-clase">Canal WhatsApp</div>
+            </div>
+            <div class="ncanal-opt" data-canal="sms" onclick="notifSelCanal(this)">
+              <i class="ph ph-device-mobile" style="font-size:22px;color:var(--amber)"></i>
+              <div class="ncanal-nombre">SMS</div>
+              <div class="ncanal-clase">Canal SMS</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Flujo visual -->
+        <div class="nflujo">
+          <div class="nflujo-paso">
+            <div class="nflujo-ico"><i class="ph ph-buildings"></i></div>
+            <div>
+              <div class="nflujo-titulo">Proveedor</div>
+              <div class="nflujo-sub">get("<span id="nflujoCanal">email</span>")</div>
+            </div>
+          </div>
+          <i class="ph ph-arrow-right" style="color:var(--t4);font-size:14px"></i>
+          <div class="nflujo-paso nflujo-factory">
+            <div class="nflujo-ico"><i class="ph ph-factory"></i></div>
+            <div>
+              <div class="nflujo-titulo">Origen</div>
+              <div class="nflujo-sub" id="nflujoFabrica">Canal Email</div>
+            </div>
+          </div>
+          <i class="ph ph-arrow-right" style="color:var(--t4);font-size:14px"></i>
+          <div class="nflujo-paso nflujo-adapter">
+            <div class="nflujo-ico"><i class="ph ph-plug"></i></div>
+            <div>
+              <div class="nflujo-titulo">Interfaz</div>
+              <div class="nflujo-sub" id="nflujoAdapter">Canal Email</div>
+            </div>
+          </div>
+          <i class="ph ph-arrow-right" style="color:var(--t4);font-size:14px"></i>
+          <div class="nflujo-paso nflujo-api">
+            <div class="nflujo-ico"><i class="ph ph-cloud-arrow-up"></i></div>
+            <div>
+              <div class="nflujo-titulo">API Externa</div>
+              <div class="nflujo-sub" id="nflujoApi">Email API</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Formulario -->
+        <div class="frow" style="margin-top:14px">
+          <div class="fg">
+            <label class="flabel">Destinatario</label>
+            <select class="fselect" id="nDestinatario">
+              <option value="">— Cargando usuarios... —</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label class="flabel">Asunto</label>
+            <input class="finput" id="nAsunto" value="Notificación TaskFlow" placeholder="Asunto del email">
+          </div>
+        </div>
+
+        <!-- Campo de teléfono — visible solo para WhatsApp/SMS -->
+        <div class="fg" id="nTelWrap" style="display:none;margin-top:10px">
+          <label class="flabel" id="nTelLabel">Número de WhatsApp</label>
+          <div class="nphone-row">
+            <select class="fselect" id="nCodPais" title="Código de país" style="max-width:110px">
+              <option value="+57" selected>🇨🇴 +57</option>
+              <option value="+34">🇪🇸 +34</option>
+              <option value="+52">🇲🇽 +52</option>
+              <option value="+54">🇦🇷 +54</option>
+              <option value="+51">🇵🇪 +51</option>
+              <option value="+56">🇨🇱 +56</option>
+              <option value="+58">🇻🇪 +58</option>
+              <option value="+1">🇺🇸 +1</option>
+            </select>
+            <div style="position:relative;flex:1">
+              <i class="ph ph-phone" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--t3);font-size:15px;pointer-events:none"></i>
+              <input class="finput" id="nTelefono" placeholder="300 000 0000 o +57 3000000000"
+                style="padding-left:36px"
+                title="Puedes escribir el número separado o completo con código país">
+            </div>
+          </div>
+          <div style="font-size:10px;color:var(--t3);margin-top:4px;font-family:var(--mono)">
+            Se normaliza automáticamente. Acepta número pegado o separado.
+          </div>
+        </div>
+
+        <div class="fg" style="margin-top:10px">
+          <label class="flabel">Mensaje</label>
+          <textarea class="ftextarea" id="nMensaje" placeholder="Escribe el mensaje..." style="min-height:72px"></textarea>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;gap:12px;flex-wrap:wrap">
+          <div id="nResultado" style="font-size:12px;font-family:var(--mono);color:var(--t3);flex:1"></div>
+          <div class="flex" style="gap:8px">
+            <button class="btn btn-outline btn-sm" onclick="notifProbarTodos()" id="btnProbarCanales">
+              <i class="ph ph-broadcast"></i> Probar todos
+            </button>
+            <button class="btn btn-primary" onclick="notifEnviar()" id="btnEnviarNotif">
+              <i class="ph ph-paper-plane-tilt"></i> Enviar notificación
+            </button>
+          </div>
+        </div>
+        <div class="ferror" id="nError" style="margin-top:6px"></div>
+      </div>
+    </div>
+
+    <!-- VISTA ADMIN: tabla global -->
+    <div id="panelAdminNotif" style="display:none" class="mb16">
+      <div class="card">
+        <div class="flex-between" style="margin-bottom:14px">
+          <div class="card-t" style="margin-bottom:0">
+            <i class="ph ph-globe"></i> Actividad reciente del sistema
+          </div>
+          <div class="flex" style="gap:8px">
+            <span class="badge bi"><i class="ph ph-shield-star"></i> Admin</span>
+            <button class="btn btn-outline btn-xs" onclick="cargarTodasNotificaciones()">
+              <i class="ph ph-arrows-clockwise"></i> Actualizar
+            </button>
+          </div>
+        </div>
+        <div class="tabla-wrap">
+          <table>
+            <thead><tr><th>Acción</th><th>Rol</th><th>Usuario</th><th>Estado</th><th>Fecha</th></tr></thead>
+            <tbody id="tbTodasNotif"><tr><td colspan="5" class="vacío">Cargando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- VISTA USUARIO: mis notificaciones + preferencias -->
+    <div id="panelMisNotif" style="display:none">
+      <div class="card mb16">
+        <div class="card-t"><i class="ph ph-bell-simple"></i> Mis notificaciones</div>
+        <div id="listaNotifc" class="vacío">Cargando...</div>
+      </div>
+      <div class="card mb16">
+        <div class="card-t"><i class="ph ph-broadcast"></i> Canal de notificaciones</div>
+        <select class="fselect" id="canalNotif" style="margin-bottom:4px">
+          <option value="IN_APP">📱 Solo en la app (In-App)</option>
+          <option value="EMAIL">📧 Solo por Email</option>
+          <option value="AMBOS">📱📧 Ambos (In-App + Email)</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="card-t"><i class="ph ph-sliders"></i> Preferencias de notificación</div>
+        <div id="prefsNotif"></div>
+        <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-outline btn-sm" onclick="cargarNotificaciones()">
+            <i class="ph ph-arrow-clockwise"></i> Recargar
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="guardarPrefs()">
+            <i class="ph ph-floppy-disk"></i> Guardar preferencias
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>

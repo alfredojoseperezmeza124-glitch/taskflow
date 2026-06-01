@@ -1,0 +1,244 @@
+<!-- ═══════════════════════════════════════════════════
+   TaskFlow — modules/dashboard/dashboard.html
+   Template HTML del módulo Dashboard.
+   Extraído de loader.js.
+════════════════════════════════════════════════════ -->
+<div class="pantalla" id="pantalla-dashboard">
+  <div class="dash-wrap">
+
+    <div class="dash-hero">
+      <div>
+        <div class="dash-title" id="dashSaludo">Dashboard estratégico</div>
+        <div class="dash-sub">
+          <i class="ph-fill ph-circle"></i>
+          En tiempo real · <span id="dashFecha"></span>
+        </div>
+      </div>
+      <div class="dash-controls">
+        <button class="btn btn-outline btn-sm dash-refresh" onclick="refrescarDashboard()" title="Actualizar dashboard">
+          <i class="ph ph-arrows-clockwise"></i>
+        </button>
+        <div id="dashAcciones"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="chart-header" style="margin-bottom:12px">
+        <div>
+          <div class="chart-title"><i class="ph ph-funnel"></i> Filtros analíticos</div>
+          <div class="chart-sub">Cruza proyecto, fase, etapa, responsable y contexto jerárquico</div>
+        </div>
+        <button class="btn btn-ghost btn-xs" onclick="limpiarFiltrosDashboard()">
+          <i class="ph ph-eraser"></i> Limpiar
+        </button>
+      </div>
+      <div class="frow" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+        <div class="fg">
+          <label class="flabel">Proyecto</label>
+          <select class="fselect" id="selDashProy" onchange="actualizarDashboardProy(this.value)">
+            <option value="">— Todos los proyectos —</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="flabel">Fase</label>
+          <select class="fselect" id="selDashFase" onchange="onCambioFaseDashboard()">
+            <option value="">— Todas las fases —</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="flabel">Etapa</label>
+          <select class="fselect" id="selDashEtapa" onchange="onCambioFiltroDashboard()">
+            <option value="">— Todas las etapas —</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="flabel">Responsable</label>
+          <select class="fselect" id="selDashResp" onchange="onCambioFiltroDashboard()">
+            <option value="">— Todo el equipo —</option>
+          </select>
+        </div>
+      </div>
+      <div class="frow" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:10px">
+        <div class="fg">
+          <label class="flabel">Prioridad</label>
+          <select class="fselect" id="selDashPrio" onchange="onCambioFiltroDashboard()">
+            <option value="">— Todas —</option>
+            <option value="BAJA">Baja</option>
+            <option value="MEDIA">Media</option>
+            <option value="ALTA">Alta</option>
+            <option value="URGENTE">Urgente</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="flabel">Tipo</label>
+          <select class="fselect" id="selDashTipo" onchange="onCambioFiltroDashboard()">
+            <option value="">— Todos —</option>
+            <option value="TASK">Task</option>
+            <option value="BUG">Bug</option>
+            <option value="FEATURE">Feature</option>
+            <option value="IMPROVEMENT">Improvement</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="flabel">Contexto</label>
+          <select class="fselect" id="selDashContexto" onchange="onCambioFiltroDashboard()">
+            <option value="todos">Todo el trabajo</option>
+            <option value="estructura">Solo con fase/etapa</option>
+            <option value="legadas">Solo legadas sin fase/etapa</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="flabel">Ventana de velocidad</label>
+          <select class="fselect" id="selDashSemanas" onchange="onCambioFiltroDashboard()">
+            <option value="4">4 semanas</option>
+            <option value="8" selected>8 semanas</option>
+            <option value="12">12 semanas</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:10px;display:flex;justify-content:flex-end">
+        <label class="txt3" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--b1);border-radius:var(--r);background:var(--s2);cursor:pointer">
+          <input type="checkbox" id="chkDashIncluirSubEtapa" checked onchange="onCambioFiltroDashboard()">
+          Incluir subtareas de etapa
+        </label>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-primary">
+        <div class="kpi-icon"><i class="ph ph-chart-line-up"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Trabajo visible</div>
+          <div class="kpi-value" id="stDashTrabajo">—</div>
+          <div class="kpi-sub" id="stDashTrabajoSub">—</div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-success">
+        <div class="kpi-icon"><i class="ph ph-kanban"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Tareas Kanban</div>
+          <div class="kpi-value" id="stDashTareas">—</div>
+          <div class="kpi-sub" id="stDashTareasSub">—</div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info">
+        <div class="kpi-icon"><i class="ph ph-tree-structure"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Subtareas de etapa</div>
+          <div class="kpi-value" id="stDashSubEtapas">—</div>
+          <div class="kpi-sub" id="stDashSubEtapasSub">—</div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-danger">
+        <div class="kpi-icon"><i class="ph ph-warning-circle"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Trabajo vencido</div>
+          <div class="kpi-value" id="stDashVencidas">—</div>
+          <div class="kpi-sub" id="stDashVencidasSub">—</div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-warning">
+        <div class="kpi-icon"><i class="ph ph-git-branch"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Cobertura estructura</div>
+          <div class="kpi-value" id="stDashCobertura">—</div>
+          <div class="kpi-sub" id="stDashCoberturaSub">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-row-main">
+      <div class="card dash-chart-lg">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title"><i class="ph ph-kanban"></i> Flujo por estado</div>
+            <div class="chart-sub">Columnas Kanban + subtareas de etapa</div>
+          </div>
+        </div>
+        <div id="chartDashEstado" style="height:300px"></div>
+      </div>
+      <div class="card dash-chart-md">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title"><i class="ph ph-trend-up"></i> Velocidad semanal</div>
+            <div class="chart-sub">Creación de trabajo en la ventana seleccionada</div>
+          </div>
+        </div>
+        <div id="chartDashVelocidad" style="height:300px"></div>
+      </div>
+    </div>
+
+    <div class="dash-row-2">
+      <div class="card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title"><i class="ph ph-flag-banner"></i> Distribución por fase</div>
+            <div class="chart-sub">Incluye tareas y subtareas de etapa según filtros</div>
+          </div>
+        </div>
+        <div id="chartDashFase" style="height:220px"></div>
+      </div>
+      <div class="card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title"><i class="ph ph-signpost"></i> Carga por etapa</div>
+            <div class="chart-sub">Comparativo tareas vs subtareas de etapa</div>
+          </div>
+        </div>
+        <div id="chartDashEtapa" style="height:220px"></div>
+      </div>
+      <div class="card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title"><i class="ph ph-users-three"></i> Carga del equipo</div>
+            <div class="chart-sub">Asignaciones activas por miembro</div>
+          </div>
+        </div>
+        <div id="chartDashResponsables" style="height:220px"></div>
+      </div>
+    </div>
+
+    <div class="dash-row-main">
+      <div class="card dash-chart-md">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title"><i class="ph ph-chart-pie-slice"></i> Prioridad</div>
+            <div class="chart-sub">Mix de prioridades en tareas</div>
+          </div>
+        </div>
+        <div id="chartDashPrioridad" style="height:250px"></div>
+      </div>
+      <div class="card dash-chart-md">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title"><i class="ph ph-chart-bar"></i> Tipo de trabajo</div>
+            <div class="chart-sub">Task / Bug / Feature / Improvement</div>
+          </div>
+        </div>
+        <div id="chartDashTipo" style="height:250px"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="chart-header" style="margin-bottom:12px">
+        <div>
+          <div class="chart-title"><i class="ph ph-lightbulb"></i> Insights del estado actual</div>
+          <div class="chart-sub">Lectura automática basada en fase, etapa y tareas legadas</div>
+        </div>
+      </div>
+      <div id="dashAlertas" class="vacío">Analizando...</div>
+    </div>
+
+    <div class="card dash-projects-panel" style="margin-bottom:24px">
+      <div class="chart-header" style="margin-bottom:16px">
+        <div>
+          <div class="chart-title"><i class="ph ph-folder-simple-star"></i> Proyectos recientes</div>
+          <div class="chart-sub">Últimos proyectos con actividad</div>
+        </div>
+        <div id="dashAccionesProy"></div>
+      </div>
+      <div id="dashProyectos" class="vacío">Cargando...</div>
+    </div>
+
+  </div>
+</div>

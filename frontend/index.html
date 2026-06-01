@@ -834,13 +834,91 @@
       // En producción: https://tu-backend.railway.app/api/v1
       window.API_URL = "http://localhost:8000/api/v1";
     </script>
+    <!-- Core Infrastructure -->
+    <script src="js/core/state.js"></script>
+    <script src="js/core/helpers.js"></script>
+    <script src="js/core/adapter-base.js"></script>
+    <script src="js/core/chain-handler.js"></script>
+    <script src="js/core/request-chain.js"></script>
+    <script src="js/core/response-chain.js"></script>
+    <script src="js/core/module-loader.js"></script>
+    <script src="js/core/api-client.js"></script>
+
+    <!-- Módulos (Carga de payloads, adapters y controladores) -->
+    <!-- login -->
+    <script src="js/modules/login/login.payload.js"></script>
+    <script src="js/modules/login/login.response.js"></script>
+    <script src="js/modules/login/login.adapter.js"></script>
+    <script src="js/modules/login/login.js"></script>
+
+    <!-- dashboard -->
+    <script src="js/modules/dashboard/dashboard.payload.js"></script>
+    <script src="js/modules/dashboard/dashboard.response.js"></script>
+    <script src="js/modules/dashboard/dashboard.adapter.js"></script>
+    <script src="js/modules/dashboard/dashboard.js"></script>
+
+    <!-- proyectos -->
+    <script src="js/modules/proyectos/proyectos.payload.js"></script>
+    <script src="js/modules/proyectos/proyectos.response.js"></script>
+    <script src="js/modules/proyectos/proyectos.adapter.js"></script>
+    <script src="js/modules/proyectos/proyectos.js"></script>
+
+    <!-- tablero -->
+    <script src="js/modules/tablero/tablero.payload.js"></script>
+    <script src="js/modules/tablero/tablero.response.js"></script>
+    <script src="js/modules/tablero/tablero.adapter.js"></script>
+    <script src="js/modules/tablero/tablero.js"></script>
+
+    <!-- tareas -->
+    <script src="js/modules/tareas/tareas.payload.js"></script>
+    <script src="js/modules/tareas/tareas.response.js"></script>
+    <script src="js/modules/tareas/tareas.adapter.js"></script>
+    <script src="js/modules/tareas/tareas.js"></script>
+
+    <!-- usuarios -->
+    <script src="js/modules/usuarios/usuarios.payload.js"></script>
+    <script src="js/modules/usuarios/usuarios.response.js"></script>
+    <script src="js/modules/usuarios/usuarios.adapter.js"></script>
+    <script src="js/modules/usuarios/usuarios.js"></script>
+
+    <!-- registro -->
+    <script src="js/modules/registro/registro.payload.js"></script>
+    <script src="js/modules/registro/registro.response.js"></script>
+    <script src="js/modules/registro/registro.adapter.js"></script>
+    <script src="js/modules/registro/registro.js"></script>
+
+    <!-- reportes -->
+    <script src="js/modules/reportes/reportes.payload.js"></script>
+    <script src="js/modules/reportes/reportes.response.js"></script>
+    <script src="js/modules/reportes/reportes.adapter.js"></script>
+    <script src="js/modules/reportes/reportes.js"></script>
+
+    <!-- historial -->
+    <script src="js/modules/historial/historial.payload.js"></script>
+    <script src="js/modules/historial/historial.response.js"></script>
+    <script src="js/modules/historial/historial.adapter.js"></script>
+    <script src="js/modules/historial/historial.js"></script>
+
+    <!-- notificaciones -->
+    <script src="js/modules/notificaciones/notificaciones.payload.js"></script>
+    <script src="js/modules/notificaciones/notificaciones.response.js"></script>
+    <script src="js/modules/notificaciones/notificaciones.adapter.js"></script>
+    <script src="js/modules/notificaciones/notificaciones.js"></script>
+
+    <!-- perfil -->
+    <script src="js/modules/perfil/perfil.payload.js"></script>
+    <script src="js/modules/perfil/perfil.response.js"></script>
+    <script src="js/modules/perfil/perfil.adapter.js"></script>
+    <script src="js/modules/perfil/perfil.js"></script>
+
+    <!-- configuracion -->
+    <script src="js/modules/configuracion/configuracion.payload.js"></script>
+    <script src="js/modules/configuracion/configuracion.response.js"></script>
+    <script src="js/modules/configuracion/configuracion.adapter.js"></script>
+    <script src="js/modules/configuracion/configuracion.js"></script>
+
+    <!-- Aplicación Principal y Cargador -->
     <script src="js/app.js"></script>
-    <script src="js/tablero.js"></script>
-    <script src="js/vistas.js"></script>
-    <script src="js/subtareas.js"></script>
-    <script src="js/parches.js"></script>
-    <script src="js/dashboard.js"></script>
-    <script src="js/configuracion.js"></script>
     <script src="js/loader.js"></script>
   </body>
 </html>
