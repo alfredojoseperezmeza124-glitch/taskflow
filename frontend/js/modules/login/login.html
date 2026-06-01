@@ -1,0 +1,112 @@
+<!-- ═══════════════════════════════════════════════════
+   TaskFlow — modules/login/login.html
+   Template HTML del módulo Login.
+   Extraído de loader.js (PAGINAS_HTML.login)
+════════════════════════════════════════════════════ -->
+<div class="login-overlay" id="loginOverlay">
+
+  <!-- Fondo con gradiente y elementos decorativos -->
+  <div class="login-bg">
+    <div class="login-bg-orb login-bg-orb1"></div>
+    <div class="login-bg-orb login-bg-orb2"></div>
+    <div class="login-bg-orb login-bg-orb3"></div>
+    <div class="login-bg-grid"></div>
+  </div>
+
+  <!-- Contenedor principal horizontal -->
+  <div class="login-card">
+
+    <!-- Panel izquierdo — branding + ilustración -->
+    <div class="login-left">
+      <div class="login-logo-row">
+        <div class="login-logo-icon">
+          <i class="ph ph-kanban"></i>
+        </div>
+        <span class="login-logo-text">TaskFlow</span>
+      </div>
+
+      <div class="login-hero">
+        <div class="login-hero-title">Gestión ágil para<br>equipos que <span class="login-hero-accent">entregan</span></div>
+        <div class="login-hero-desc">Organiza proyectos, asigna tareas y mantén el control con tableros Kanban en tiempo real.</div>
+      </div>
+
+      <!-- Stats decorativas -->
+      <div class="login-stats">
+        <div class="login-stat">
+          <div class="login-stat-num" id="loginPatronesCount">—</div>
+          <div class="login-stat-label">Tecnologías</div>
+        </div>
+        <div class="login-stat-sep"></div>
+        <div class="login-stat">
+          <div class="login-stat-num">3</div>
+          <div class="login-stat-label">Roles de usuario</div>
+        </div>
+        <div class="login-stat-sep"></div>
+        <div class="login-stat">
+          <div class="login-stat-num">∞</div>
+          <div class="login-stat-label">Proyectos</div>
+        </div>
+      </div>
+
+      <!-- Pills de features -->
+      <div class="login-pills">
+        <div class="login-pill"><i class="ph ph-kanban"></i> Kanban</div>
+        <div class="login-pill"><i class="ph ph-users"></i> Equipos</div>
+        <div class="login-pill"><i class="ph ph-chart-bar"></i> Reportes</div>
+        <div class="login-pill"><i class="ph ph-bell"></i> Notificaciones</div>
+        <div class="login-pill"><i class="ph ph-list-checks"></i> Subtareas</div>
+      </div>
+    </div>
+
+    <!-- Panel derecho — formulario -->
+    <div class="login-right">
+      <div class="login-form-header">
+        <div class="login-form-title">Iniciar sesión</div>
+        <div class="login-form-sub">Ingresa tus credenciales para continuar</div>
+      </div>
+
+      <div class="login-fields">
+        <div class="fg">
+          <label class="flabel">Correo electrónico</label>
+          <div class="login-input-wrap">
+            <i class="ph ph-envelope login-input-ico"></i>
+            <input class="finput login-finput" id="lEmail" type="email"
+              placeholder="correo@empresa.com" autocomplete="email">
+          </div>
+        </div>
+
+        <div class="fg">
+          <label class="flabel">Contraseña</label>
+          <div class="login-input-wrap">
+            <i class="ph ph-lock login-input-ico"></i>
+            <input class="finput login-finput login-finput-pass" id="lPass" type="password"
+              placeholder="••••••••" autocomplete="current-password">
+            <button onclick="toggleVerPass()" tabindex="-1" id="btnVerPass" class="login-eye-btn">
+              <i class="ph ph-eye" id="iconoVerPass"></i>
+            </button>
+          </div>
+          <div class="ferror" id="lError"></div>
+        </div>
+
+        <button class="btn btn-primary btn-w login-btn" id="btnLogin" onclick="iniciarSesion()">
+          <i class="ph ph-sign-in"></i> Iniciar sesión
+        </button>
+      </div>
+
+      <div class="login-roles">
+        <div class="login-roles-label">Roles del sistema</div>
+        <div class="login-roles-badges">
+          <span class="login-role-badge login-role-admin"><i class="ph ph-shield-check"></i> Admin</span>
+          <span class="login-role-badge login-role-pm"><i class="ph ph-briefcase"></i> Project Manager</span>
+          <span class="login-role-badge login-role-dev"><i class="ph ph-code"></i> Developer</span>
+        </div>
+      </div>
+
+      <div class="login-footer">
+        Universidad Popular del Cesar · TaskFlow 2026
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="pantalla activa" id="pantalla-login" style="display:none"></div>

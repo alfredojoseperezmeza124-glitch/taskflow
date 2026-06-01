@@ -1,0 +1,171 @@
+<!-- ═══════════════════════════════════════════════════
+   TaskFlow — modules/configuracion/configuracion.html
+   Template HTML del módulo Configuración.
+   Extraído de loader.js.
+════════════════════════════════════════════════════ -->
+<div class="pantalla" id="pantalla-configuracion">
+  <div class="page-wrap" style="max-width:100%">
+
+    <div class="page-head">
+      <div>
+        <div class="page-title">Configuración</div>
+        <div class="page-desc">Personalización y ajustes del sistema</div>
+      </div>
+    </div>
+
+    <!-- ── TEMAS VISUALES ── -->
+    <div class="card mb16">
+      <div class="perfil-section-title">
+        <i class="ph ph-paint-brush" style="color:var(--a)"></i>
+        Tema visual
+      </div>
+      <div class="txt3 mb8" style="font-size:12px;line-height:1.6">
+        Selecciona una familia de colores. El backend genera todas las variables CSS usando la fábrica correspondiente.
+        Cada tema es una implementación concreta de <code style="background:var(--s3);padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:11px">FabricaTema</code>.
+      </div>
+
+      <div class="temas-grid" id="temasGrid">
+        <!-- Generado por JS -->
+      </div>
+
+      <div id="temaVariablesPanel" style="display:none;margin-top:16px">
+        <div class="sep"></div>
+        <div class="card-t" style="margin-bottom:10px"><i class="ph ph-code"></i> Variables generadas por la fábrica</div>
+        <div id="temaVariablesContenido"></div>
+      </div>
+    </div>
+
+    <!-- ── CONFIGURACIÓN GENERAL ── -->
+    <div class="card mb16" id="cardConfigGeneral" style="display:none">
+      <div class="perfil-section-title">
+        <i class="ph ph-sliders" style="color:var(--amber)"></i>
+        Configuración general del sistema
+        <span class="badge bi" style="margin-left:auto">Solo Admin</span>
+      </div>
+
+      <div class="frow">
+        <div class="fg">
+          <label class="flabel">Nombre de la plataforma</label>
+          <input class="finput" id="cfgNombre" placeholder="TaskFlow">
+        </div>
+        <div class="fg">
+          <label class="flabel">Zona horaria</label>
+          <select class="fselect" id="cfgZona">
+            <option value="America/Bogota">América/Bogotá (UTC-5)</option>
+            <option value="America/Lima">América/Lima (UTC-5)</option>
+            <option value="America/Mexico_City">América/México (UTC-6)</option>
+            <option value="America/Buenos_Aires">América/Buenos Aires (UTC-3)</option>
+            <option value="America/Santiago">América/Santiago (UTC-4)</option>
+            <option value="UTC">UTC</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="fg" style="max-width:200px">
+        <label class="flabel">Tamaño máximo de archivos (MB)</label>
+        <input class="finput" id="cfgMaxFile" type="number" min="1" max="100" value="10">
+      </div>
+
+      <div class="ferror" id="cfgError"></div>
+      <div class="flex" style="justify-content:flex-end;margin-top:4px">
+        <button class="btn btn-primary" onclick="guardarConfiguracion()">
+          <i class="ph ph-floppy-disk"></i> Guardar configuración
+        </button>
+      </div>
+    </div>
+
+    <!-- ── POLÍTICA DE CONTRASEÑAS ── -->
+    <div class="card mb16" id="cardPolitica" style="display:none">
+      <div class="perfil-section-title">
+        <i class="ph ph-lock-key" style="color:var(--green)"></i>
+        Política de contraseñas
+        <span class="badge bi" style="margin-left:auto">Solo Admin</span>
+      </div>
+
+      <div class="config-politica-grid">
+        <div class="config-pol-item">
+          <div>
+            <div class="config-pol-label">Longitud mínima</div>
+            <div class="config-pol-desc">Caracteres requeridos</div>
+          </div>
+          <input class="finput" id="polLong" type="number" min="4" max="32" value="8"
+            style="width:70px;text-align:center">
+        </div>
+        <div class="config-pol-item">
+          <div>
+            <div class="config-pol-label">Requiere mayúsculas</div>
+            <div class="config-pol-desc">Al menos una letra mayúscula</div>
+          </div>
+          <div class="toggle on" id="polMay" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div class="config-pol-item">
+          <div>
+            <div class="config-pol-label">Requiere números</div>
+            <div class="config-pol-desc">Al menos un dígito</div>
+          </div>
+          <div class="toggle on" id="polNum" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div class="config-pol-item">
+          <div>
+            <div class="config-pol-label">Requiere símbolos</div>
+            <div class="config-pol-desc">Al menos un carácter especial</div>
+          </div>
+          <div class="toggle" id="polSim" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div class="config-pol-item">
+          <div>
+            <div class="config-pol-label">Caducidad (días)</div>
+            <div class="config-pol-desc">0 = sin caducidad</div>
+          </div>
+          <input class="finput" id="polCad" type="number" min="0" max="365" value="90"
+            style="width:70px;text-align:center">
+        </div>
+      </div>
+
+      <div class="flex" style="justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-primary" onclick="guardarPolitica()">
+          <i class="ph ph-floppy-disk"></i> Guardar política
+        </button>
+      </div>
+    </div>
+
+    <!-- ── INFO DEL SISTEMA ── -->
+    <div class="card">
+      <div class="perfil-section-title">
+        <i class="ph ph-info" style="color:var(--blue)"></i>
+        Información del sistema
+      </div>
+      <div class="config-info-grid">
+        <div class="config-info-item">
+          <i class="ph ph-factory" style="color:var(--a)"></i>
+          <div>
+            <div class="config-info-label">Tema visual</div>
+            <div class="config-info-val">3 estilos disponibles: Oscuro, Claro, Azul</div>
+          </div>
+        </div>
+        <div class="config-info-item">
+          <i class="ph ph-database" style="color:var(--green)"></i>
+          <div>
+            <div class="config-info-label">Base de datos</div>
+            <div class="config-info-val">MongoDB Atlas — taskflow</div>
+          </div>
+        </div>
+        <div class="config-info-item">
+          <i class="ph ph-lightning" style="color:var(--amber)"></i>
+          <div>
+            <div class="config-info-label">Backend</div>
+            <div class="config-info-val">FastAPI 0.115 · Python 3.12</div>
+          </div>
+        </div>
+        <div class="config-info-item">
+          <i class="ph ph-users" style="color:var(--purple)"></i>
+          <div>
+            <div class="config-info-label">Usuarios conectados</div>
+            <div class="config-info-val" id="cfgUsersOnline">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>

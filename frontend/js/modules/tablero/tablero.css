@@ -1,0 +1,22 @@
+/* ═══════════════════════════════════════════════════
+   TaskFlow — modules/tablero/tablero.css
+   Estilos específicos para el módulo Tablero (Kanban).
+════════════════════════════════════════════════════ */
+
+.drag-placeholder {
+  background: var(--s3);
+  border: 2px dashed var(--b2);
+  border-radius: 8px;
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+.dragging {
+  opacity: 0.4;
+  transform: rotate(2deg);
+}
+
+.drag-over {
+  background: var(--s2) !important;
+  border-color: var(--acento) !important;
+}

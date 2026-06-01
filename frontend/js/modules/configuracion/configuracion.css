@@ -1,0 +1,192 @@
+/* ═══════════════════════════════════════════════════
+   TaskFlow — modules/configuracion/configuracion.css
+   Estilos específicos para el módulo Configuración.
+════════════════════════════════════════════════════ */
+
+.temas-grid {
+  display: grid;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.tema-card {
+  border: 1px solid var(--b1);
+  border-radius: var(--r);
+  background: var(--s2);
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.tema-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--a2);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.tema-card.activo {
+  border-color: var(--acento);
+  box-shadow: 0 0 0 2px var(--acento);
+}
+
+.tema-preview {
+  height: 60px;
+  border-radius: 6px;
+  display: flex;
+  overflow: hidden;
+  margin-bottom: 10px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.tema-preview-sidebar {
+  width: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-top: 6px;
+}
+
+.tema-preview-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.tema-preview-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+}
+
+.tema-preview-bar {
+  height: 4px;
+  border-radius: 2px;
+}
+
+.tema-nombre {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t1);
+  margin-bottom: 2px;
+}
+
+.tema-desc {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--t3);
+  margin-bottom: 8px;
+}
+
+.tema-colores {
+  display: flex;
+  gap: 4px;
+  margin-top: auto;
+}
+
+.tema-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.tema-vars-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.tema-var-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: var(--s2);
+  border: 1px solid var(--b1);
+  border-radius: 6px;
+}
+
+.tema-var-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.tema-var-nombre {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--t2);
+}
+
+.tema-var-valor {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--t3);
+}
+
+.config-politica-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.config-pol-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--b1);
+  border-radius: var(--r);
+  background: var(--s2);
+}
+
+.config-pol-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t1);
+}
+
+.config-pol-desc {
+  font-size: 10px;
+  color: var(--t3);
+}
+
+.config-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.config-info-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: var(--s2);
+  border: 1px solid var(--b1);
+  border-radius: var(--r);
+}
+
+.config-info-item i {
+  font-size: 20px;
+}
+
+.config-info-label {
+  font-size: 11px;
+  color: var(--t3);
+}
+
+.config-info-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t2);
+}

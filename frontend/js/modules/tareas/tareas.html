@@ -1,0 +1,35 @@
+<!-- ═══════════════════════════════════════════════════
+   TaskFlow — modules/tareas/tareas.html
+   Template HTML del módulo Tareas.
+   Extraído de loader.js.
+════════════════════════════════════════════════════ -->
+<div class="pantalla" id="pantalla-tareas">
+  <div class="page-wrap">
+    <div class="page-head">
+      <div><div class="page-title">Tareas</div><div class="page-desc">Gestión y seguimiento de tareas</div></div>
+      <div class="flex" style="gap:8px;flex-wrap:wrap">
+        <select class="fselect" id="selTareasProy" style="width:200px;padding:6px 10px" onchange="cargarTareasPaginadas(this.value,1)">
+          <option value="">— Proyecto —</option>
+        </select>
+        <select class="fselect" id="fTareaFase" style="width:180px;padding:6px 10px" onchange="onCambioFiltroFaseTareas()">
+          <option value="">— Fase —</option>
+        </select>
+        <select class="fselect" id="fTareaEtapa" style="width:180px;padding:6px 10px" onchange="onCambioFiltroEtapaTareas()">
+          <option value="">— Etapa —</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalTarea()">
+          <i class="ph ph-plus"></i> Nueva
+        </button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tabla-wrap">
+        <table>
+          <thead><tr><th>Título</th><th>Tipo</th><th>Prioridad</th><th>Contexto</th><th>Responsables</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody id="tbTareas"><tr><td colspan="7" class="vacío">Selecciona un proyecto para ver las tareas</td></tr></tbody>
+        </table>
+      </div>
+      <div id="pagTareas"></div>
+    </div>
+  </div>
+</div>

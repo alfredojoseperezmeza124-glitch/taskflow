@@ -1,0 +1,91 @@
+<!-- ═══════════════════════════════════════════════════
+   TaskFlow — modules/reportes/reportes.html
+   Template HTML del módulo Reportes.
+   Extraído de loader.js.
+════════════════════════════════════════════════════ -->
+<div class="pantalla" id="pantalla-reportes">
+  <div class="page-wrap">
+    <div class="page-head">
+      <div><div class="page-title">Reportes y estadísticas</div><div class="page-desc">Métricas y seguimiento del proyecto</div></div>
+      <select class="fselect" id="selReporteProy" style="width:220px;padding:6px 10px" onchange="cargarReporte(this.value)">
+        <option value="">— Selecciona un proyecto —</option>
+      </select>
+    </div>
+    <div class="htabs" id="tabsReporte">
+      <button class="htab activo" onclick="cambiarTabReporte('metricas',this)"><i class="ph ph-chart-pie"></i> Métricas</button>
+      <button class="htab" onclick="cambiarTabReporte('sprint',this)"><i class="ph ph-lightning"></i> Sprint</button>
+      <button class="htab" onclick="cambiarTabReporte('equipo',this)"><i class="ph ph-users-three"></i> Equipo</button>
+      <button class="htab" id="tabAuditGlobal" onclick="cambiarTabReporte('auditoria_global',this)" style="display:none"><i class="ph ph-shield-check"></i> Auditoría global</button>
+      <button class="htab" id="tabRetencion" onclick="cambiarTabReporte('retencion',this)" style="display:none"><i class="ph ph-archive"></i> Retención</button>
+      <button class="htab" onclick="cambiarTabReporte('exportar',this)"><i class="ph ph-bridge"></i> Exportar</button>
+    </div>
+    <div class="hpanel activo" id="rpanel-metricas">
+      <div class="stats-row">
+        <div class="stat" style="--g:rgba(108,99,255,.3)"><div class="stat-n">Total tareas</div><div class="stat-v" id="rTotal">—</div></div>
+        <div class="stat" style="--g:rgba(248,113,113,.3)"><div class="stat-n">Vencidas</div><div class="stat-v" id="rVenc" style="color:var(--red)">—</div></div>
+        <div class="stat" style="--g:rgba(52,211,153,.3)"><div class="stat-n">Progreso</div><div class="stat-v" id="rProg">—</div></div>
+      </div>
+      <div class="card"><div class="card-t"><i class="ph ph-list-bullets"></i> Distribución por columna</div><div id="rDist" class="vacío">Selecciona un proyecto</div></div>
+    </div>
+    <div class="hpanel" id="rpanel-sprint">
+      <div class="card">
+        <div class="card-t"><i class="ph ph-lightning"></i> Reporte de sprint</div>
+        <div class="flex" style="gap:8px;margin-bottom:16px">
+          <input class="finput" id="sprintNombre" placeholder="Nombre del sprint (ej: Sprint 1, Q1 2026...)" style="flex:1">
+          <button class="btn btn-primary btn-sm" onclick="generarReporteSprint()"><i class="ph ph-play"></i> Generar</button>
+        </div>
+        <div id="contenidoSprint" class="vacío">Selecciona un proyecto e ingresa el nombre del sprint</div>
+      </div>
+    </div>
+    <div class="hpanel" id="rpanel-equipo">
+      <div class="card"><div class="card-t"><i class="ph ph-users-three"></i> Estadísticas del equipo</div><div id="statsEquipo" class="vacío">Selecciona un proyecto</div></div>
+    </div>
+    <div class="hpanel" id="rpanel-auditoria_global">
+      <div class="card"><div class="card-t"><i class="ph ph-shield-check"></i> Auditoría global del sistema</div><div id="listaAuditoriaGlobal" class="vacío">Cargando...</div></div>
+    </div>
+    <div class="hpanel" id="rpanel-retencion">
+      <div class="card">
+        <div class="card-t"><i class="ph ph-archive"></i> Política de retención de logs</div>
+        <div class="fg" style="max-width:320px"><label class="flabel">Días de retención</label><input class="finput" id="diasRetencion" type="number" value="90" min="7" max="365"></div>
+        <div class="fg" style="max-width:320px">
+          <label class="flabel">Nivel mínimo a conservar</label>
+          <select class="fselect" id="nivelRetencion">
+            <option value="todos">Todos los registros</option>
+            <option value="error">Solo errores</option>
+            <option value="auditoria">Solo auditoría</option>
+          </select>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="aplicarPoliticaRetencion()"><i class="ph ph-check"></i> Aplicar política</button>
+        <div id="retencionMensaje" class="txt3" style="margin-top:12px"></div>
+      </div>
+    </div>
+    <div class="hpanel" id="rpanel-exportar">
+      <div class="card">
+        <div class="card-t"><i class="ph ph-bridge"></i> Exportación de reportes (Bridge)</div>
+        <div class="frow" style="max-width:760px">
+          <div class="fg">
+            <label class="flabel">Tipo de reporte</label>
+            <select class="fselect" id="expTipo">
+              <option value="tareas">Tareas</option>
+              <option value="auditoria">Auditoría</option>
+              <option value="equipo">Equipo</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label class="flabel">Formato de salida</label>
+            <select class="fselect" id="expFormato">
+              <option value="pdf">PDF</option>
+              <option value="csv">CSV</option>
+              <option value="json" selected>JSON</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex" style="justify-content:flex-end;margin-top:12px">
+          <button class="btn btn-primary btn-sm" onclick="exportarReporteBridgeDesdeUI()">
+            <i class="ph ph-download-simple"></i> Exportar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
