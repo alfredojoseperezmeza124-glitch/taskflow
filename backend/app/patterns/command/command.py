@@ -4,22 +4,24 @@ from typing import Any, Awaitable, Callable
 
 
 class Comando(ABC):
-    @abstractmethod
-    async def ejecutar(self) -> Any:
-        ...
-
-    @abstractmethod
-    def descripcion_auditoria(self) -> str:
-        ...
+	@abstractmethod
+	async def ejecutar(self) -> Any:  # pragma: no cover - simple contract
+		...
 
 
 class ComandoGenerico(Comando):
-    def __init__(self, descripcion: str, operacion: Callable[[], Awaitable[Any]]) -> None:
-        self._descripcion = descripcion
-        self._operacion = operacion
+	def __init__(self, func: Callable[..., Any] | Callable[..., Awaitable[Any]], *args, **kwargs) -> None:
+		self._func = func
+		self._args = args
+		self._kwargs = kwargs
 
-    async def ejecutar(self) -> Any:
-        return await self._operacion()
+	async def ejecutar(self) -> Any:
+		try:
+			res = self._func(*self._args, **self._kwargs)
+			if hasattr(res, "__await__"):
+				return await res
+			return res
+		except Exception:
+			# Propagar para que el bus o el caller puedan manejarlo
+			raise
 
-    def descripcion_auditoria(self) -> str:
-        return self._descripcion

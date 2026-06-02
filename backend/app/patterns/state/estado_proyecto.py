@@ -1,132 +1,65 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Iterable
-
-from fastapi import HTTPException
-from app.models.enums import EstadoProyecto as EstadoProyectoEnum
+from typing import Dict, List
 
 
 class EstadoProyectoBase(ABC):
-    def __init__(self, nombre: str) -> None:
-        self.nombre = nombre
+	nombre: str
 
-    @abstractmethod
-    def puede_crear_tarea(self) -> bool:
-        ...
+	@abstractmethod
+	def transiciones_posibles(self) -> List[str]:
+		...
 
-    @abstractmethod
-    def puede_editar(self) -> bool:
-        ...
-
-    def puede_archivar(self) -> bool:
-        return self.nombre != EstadoProyectoEnum.ARCHIVADO.value
-
-    @abstractmethod
-    def transiciones_validas(self) -> set[str]:
-        ...
-
-    def validar_transicion(self, siguiente: str) -> None:
-        if siguiente not in self.transiciones_validas():
-            raise HTTPException(
-                status_code=400,
-                detail=f"Transición inválida de {self.nombre} a {siguiente}",
-            )
+	def puede_transicionar_a(self, destino: str) -> bool:
+		return destino in self.transiciones_posibles()
 
 
 class EstadoPlanificado(EstadoProyectoBase):
-    def __init__(self) -> None:
-        super().__init__(EstadoProyectoEnum.PLANIFICADO.value)
+	nombre = "PLANIFICADO"
 
-    def puede_crear_tarea(self) -> bool:
-        return True
-
-    def puede_editar(self) -> bool:
-        return True
-
-    def transiciones_validas(self) -> set[str]:
-        return {
-            EstadoProyectoEnum.EN_PROGRESO.value,
-            EstadoProyectoEnum.PAUSADO.value,
-            EstadoProyectoEnum.ARCHIVADO.value,
-        }
+	def transiciones_posibles(self) -> List[str]:
+		return ["EN_PROGRESO", "PAUSADO", "ARCHIVADO"]
 
 
 class EstadoEnProgreso(EstadoProyectoBase):
-    def __init__(self) -> None:
-        super().__init__(EstadoProyectoEnum.EN_PROGRESO.value)
+	nombre = "EN_PROGRESO"
 
-    def puede_crear_tarea(self) -> bool:
-        return True
-
-    def puede_editar(self) -> bool:
-        return True
-
-    def transiciones_validas(self) -> set[str]:
-        return {
-            EstadoProyectoEnum.PAUSADO.value,
-            EstadoProyectoEnum.COMPLETADO.value,
-            EstadoProyectoEnum.ARCHIVADO.value,
-        }
+	def transiciones_posibles(self) -> List[str]:
+		return ["PAUSADO", "COMPLETADO", "ARCHIVADO"]
 
 
 class EstadoPausado(EstadoProyectoBase):
-    def __init__(self) -> None:
-        super().__init__(EstadoProyectoEnum.PAUSADO.value)
+	nombre = "PAUSADO"
 
-    def puede_crear_tarea(self) -> bool:
-        return True
-
-    def puede_editar(self) -> bool:
-        return True
-
-    def transiciones_validas(self) -> set[str]:
-        return {
-            EstadoProyectoEnum.EN_PROGRESO.value,
-            EstadoProyectoEnum.COMPLETADO.value,
-            EstadoProyectoEnum.ARCHIVADO.value,
-        }
+	def transiciones_posibles(self) -> List[str]:
+		return ["EN_PROGRESO", "ARCHIVADO"]
 
 
 class EstadoCompletado(EstadoProyectoBase):
-    def __init__(self) -> None:
-        super().__init__(EstadoProyectoEnum.COMPLETADO.value)
+	nombre = "COMPLETADO"
 
-    def puede_crear_tarea(self) -> bool:
-        return False
-
-    def puede_editar(self) -> bool:
-        return True
-
-    def transiciones_validas(self) -> set[str]:
-        return {
-            EstadoProyectoEnum.ARCHIVADO.value,
-        }
+	def transiciones_posibles(self) -> List[str]:
+		return ["ARCHIVADO"]
 
 
 class EstadoArchivado(EstadoProyectoBase):
-    def __init__(self) -> None:
-        super().__init__(EstadoProyectoEnum.ARCHIVADO.value)
+	nombre = "ARCHIVADO"
 
-    def puede_crear_tarea(self) -> bool:
-        return False
-
-    def puede_editar(self) -> bool:
-        return False
-
-    def transiciones_validas(self) -> set[str]:
-        return set()
+	def transiciones_posibles(self) -> List[str]:
+		return []
 
 
 class EstadoProyectoFactory:
-    @staticmethod
-    def crear(estado_nombre: str | None) -> EstadoProyectoBase:
-        nombre = (estado_nombre or EstadoProyectoEnum.PLANIFICADO.value).upper()
-        if nombre == EstadoProyectoEnum.EN_PROGRESO.value:
-            return EstadoEnProgreso()
-        if nombre == EstadoProyectoEnum.PAUSADO.value:
-            return EstadoPausado()
-        if nombre == EstadoProyectoEnum.COMPLETADO.value:
-            return EstadoCompletado()
-        if nombre == EstadoProyectoEnum.ARCHIVADO.value:
-            return EstadoArchivado()
-        return EstadoPlanificado()
+	_MAP = {
+		"PLANIFICADO": EstadoPlanificado,
+		"EN_PROGRESO": EstadoEnProgreso,
+		"PAUSADO": EstadoPausado,
+		"COMPLETADO": EstadoCompletado,
+		"ARCHIVADO": EstadoArchivado,
+	}
+
+	@staticmethod
+	def crear(nombre: str) -> EstadoProyectoBase:
+		cls = EstadoProyectoFactory._MAP.get((nombre or "").upper(), EstadoPlanificado)
+		return cls()
+

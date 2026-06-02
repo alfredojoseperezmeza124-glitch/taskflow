@@ -5,13 +5,14 @@ Al publicar un evento, se entrega a todos los suscriptores relevantes.
 """
 import asyncio
 from datetime import datetime, timezone
-from typing import Any, Dict, Set
+from typing import Dict, Set
 
 
 class GestorEventos:
     """
-    Subject central de eventos de dominio.
-    Mantiene tanto las colas SSE activas como los observadores registrados.
+    Singleton que mantiene las colas de eventos de usuarios conectados.
+    Estructura: { usuario_id: { queue1, queue2, ... } }
+    Un usuario puede tener múltiples pestañas abiertas (múltiples queues).
     """
     _instancia = None
 
@@ -20,21 +21,7 @@ class GestorEventos:
             cls._instancia = super().__new__(cls)
             cls._instancia._suscriptores: Dict[str, Set[asyncio.Queue]] = {}
             cls._instancia._suscriptores_proyecto: Dict[str, Set[asyncio.Queue]] = {}
-            cls._instancia._observadores: Set[Any] = set()
         return cls._instancia
-
-    def registrar_observador(self, observador: Any) -> None:
-        self._observadores.add(observador)
-
-    def desregistrar_observador(self, observador: Any) -> None:
-        self._observadores.discard(observador)
-
-    async def publicar_evento(self, evento: Any) -> None:
-        for observador in list(self._observadores):
-            try:
-                await observador.actualizar(evento)
-            except Exception:
-                pass
 
     # ── Suscripción de usuarios ──
     def suscribir_usuario(self, usuario_id: str) -> asyncio.Queue:
@@ -141,11 +128,3 @@ def evento_notificacion(notif: dict) -> dict:
 
 def evento_ping() -> dict:
     return {"tipo": "ping"}
-
-
-try:
-    from app.patterns.observer.registro import registrar_observadores
-
-    registrar_observadores(gestor_eventos)
-except ImportError:
-    pass

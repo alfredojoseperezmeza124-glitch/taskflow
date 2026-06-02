@@ -10,15 +10,6 @@ from typing import Awaitable, Callable, TypeVar
 import uuid
 
 from fastapi import HTTPException
-from app.patterns.chain.validador import (
-    ValidadorProyectoExiste,
-    ValidadorMembresiaProyecto,
-    ValidadorPropietarioProyecto,
-    ValidadorProyectoArchivado,
-    ValidadorTareaExiste,
-    ValidadorSLA,
-)
-from app.patterns.state.estado_proyecto import EstadoProyectoFactory
 
 ResultadoT = TypeVar("ResultadoT")
 class _ProxyBase:
@@ -64,22 +55,22 @@ class ProxyGestionProyectos(_ProxyBase):
         requiere_propietario: bool = False,
         permitir_archivado: bool = False,
     ) -> ResultadoT:
-        contexto = {
-            "db": self._db,
-            "proyecto_id": proyecto_id,
-            "usuario_id": usuario_id,
-            "rol": rol,
-            "permitir_archivado": permitir_archivado,
-        }
-        cadena = ValidadorProyectoArchivado(ValidadorSLA())
-        if validar_membresia:
-            cadena = ValidadorMembresiaProyecto(cadena)
-        if requiere_propietario:
-            cadena = ValidadorPropietarioProyecto(cadena)
-        cadena = ValidadorProyectoExiste(cadena)
+        proyecto = await self._db["proyectos"].find_one({"_id": proyecto_id})
+        if not proyecto:
+            raise HTTPException(status_code=404, detail="Proyecto no encontrado")
 
-        await cadena.validar(contexto)
-        proyecto = contexto["proyecto"]
+        if validar_membresia and rol != "ADMIN" and usuario_id not in proyecto.get("miembros", []):
+            raise HTTPException(status_code=403, detail="Sin acceso al proyecto")
+
+        if requiere_propietario and rol != "ADMIN" and proyecto.get("propietarioId") != usuario_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Solo el propietario o un Admin puede ejecutar esta accion en el proyecto",
+            )
+
+        if proyecto.get("estaArchivado") and not permitir_archivado:
+            raise HTTPException(status_code=400, detail="El proyecto esta archivado y es de solo lectura")
+
         await self._registrar_auditoria(
             tipo_entidad="proyecto_proxy",
             entidad_id=proyecto_id,
@@ -114,19 +105,11 @@ class ProxyGestionTareas(_ProxyBase):
         operacion: Callable[[dict], Awaitable[ResultadoT]],
         permitir_archivado: bool = False,
     ) -> ResultadoT:
-        contexto = {
-            "db": self._db,
-            "proyecto_id": proyecto_id,
-            "usuario_id": usuario_id,
-            "permitir_archivado": permitir_archivado,
-        }
-        cadena = ValidadorProyectoExiste(ValidadorProyectoArchivado(ValidadorSLA()))
-        await cadena.validar(contexto)
-        proyecto = contexto["proyecto"]
-
-        estado = EstadoProyectoFactory.crear(proyecto.get("estado"))
-        if not estado.puede_crear_tarea():
-            raise HTTPException(status_code=400, detail="No se pueden crear tareas en el estado actual del proyecto")
+        proyecto = await self._db["proyectos"].find_one({"_id": proyecto_id}, {"_id": 1, "estado": 1, "estaArchivado": 1})
+        if not proyecto:
+            raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+        if proyecto.get("estaArchivado") and not permitir_archivado:
+            raise HTTPException(status_code=400, detail="No se puede gestionar tareas en un proyecto archivado")
 
         await self._registrar_auditoria(
             tipo_entidad="tarea_proxy",
@@ -160,15 +143,18 @@ class ProxyGestionTareas(_ProxyBase):
         operacion: Callable[[dict], Awaitable[ResultadoT]],
         permitir_proyecto_archivado: bool = False,
     ) -> ResultadoT:
-        contexto = {
-            "db": self._db,
-            "tarea_id": tarea_id,
-            "usuario_id": usuario_id,
-            "permitir_archivado": permitir_proyecto_archivado,
-        }
-        cadena = ValidadorTareaExiste(ValidadorProyectoExiste(ValidadorProyectoArchivado(ValidadorSLA())))
-        await cadena.validar(contexto)
-        tarea = contexto["tarea"]
+        tarea = await self._db["tareas"].find_one({"_id": tarea_id})
+        if not tarea:
+            raise HTTPException(status_code=404, detail="Tarea no encontrada")
+
+        proyecto = await self._db["proyectos"].find_one(
+            {"_id": tarea["proyectoId"]},
+            {"_id": 1, "estado": 1, "estaArchivado": 1},
+        )
+        if not proyecto:
+            raise HTTPException(status_code=404, detail="Proyecto asociado a la tarea no encontrado")
+        if proyecto.get("estaArchivado") and not permitir_proyecto_archivado:
+            raise HTTPException(status_code=400, detail="No se puede gestionar tareas en un proyecto archivado")
 
         await self._registrar_auditoria(
             tipo_entidad="tarea_proxy",
@@ -176,7 +162,7 @@ class ProxyGestionTareas(_ProxyBase):
             accion=f"PROXY_PRE_{accion}",
             usuario_id=usuario_id,
             proyecto_id=tarea["proyectoId"],
-            valor_anterior={"columnaId": tarea.get("columnaId"), "proyectoArchivado": contexto["proyecto"].get("estaArchivado", False)},
+            valor_anterior={"columnaId": tarea.get("columnaId"), "proyectoArchivado": proyecto.get("estaArchivado", False)},
             valor_nuevo=None,
         )
 

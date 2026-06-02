@@ -82,7 +82,7 @@ window.cargarTareasPaginadas = async function (proyId, pagina) {
           <div class="flex" style="gap:4px">
             <button class="btn btn-outline btn-xs" style="color:var(--a2)"
               onclick="abrirPanelSubtareas('${t.id}','${t.titulo.replace(/'/g, "\\'")}')"
-              title="Subtareas">
+              title="Subtareas (Builder)">
               <i class="ph ph-tree-structure"></i>
             </button>
             <button class="btn btn-outline btn-xs" onclick="abrirPanelComentarios('${t.id}','${t.titulo.replace(/'/g, "\\'")}')">
@@ -140,7 +140,7 @@ function _inyectarPanelContacto() {
   card.className = "card";
   card.style.marginTop = "12px";
   card.innerHTML = `
-    <div class="card-t"><i class="ph ph-phone"></i> Contacto para canales externos</div>
+    <div class="card-t"><i class="ph ph-phone"></i> Contacto para canales externos — Adapter</div>
     <div style="font-size:11px;color:var(--t3);font-family:var(--mono);margin-bottom:12px;line-height:1.6">
       Configura tu número de teléfono para recibir notificaciones por
       <strong style="color:var(--a2)">WhatsApp</strong> y <strong style="color:var(--a2)">SMS</strong>

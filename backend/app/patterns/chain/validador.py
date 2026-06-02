@@ -1,98 +1,78 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any
-
+from typing import Any, Optional
 from fastapi import HTTPException
-from app.patterns.state.estado_proyecto import EstadoProyectoFactory
+
+from app.db.conexion import ConexionMongoDB
 
 
-class ValidadorOperacion(ABC):
-    def __init__(self, siguiente: "ValidadorOperacion" | None = None) -> None:
-        self._siguiente = siguiente
+class Validador(ABC):
+	def __init__(self, siguiente: Optional["Validador"] = None) -> None:
+		self.siguiente = siguiente
 
-    async def validar(self, contexto: dict[str, Any]) -> None:
-        await self._validar(contexto)
-        if self._siguiente:
-            await self._siguiente.validar(contexto)
+	async def manejar(self, datos: Any) -> None:
+		await self.validar(datos)
+		if self.siguiente:
+			await self.siguiente.manejar(datos)
 
-    @abstractmethod
-    async def _validar(self, contexto: dict[str, Any]) -> None:
-        ...
-
-
-class ValidadorProyectoExiste(ValidadorOperacion):
-    async def _validar(self, contexto: dict[str, Any]) -> None:
-        db = contexto["db"]
-        proyecto_id = contexto["proyecto_id"]
-        proyecto = await db["proyectos"].find_one({"_id": proyecto_id})
-        if not proyecto:
-            raise HTTPException(status_code=404, detail="Proyecto no encontrado")
-        contexto["proyecto"] = proyecto
+	@abstractmethod
+	async def validar(self, datos: Any) -> None:
+		"""Lanza excepción si la validación falla; no retorna nada si es válida."""
+		...
 
 
-class ValidadorMembresiaProyecto(ValidadorOperacion):
-    async def _validar(self, contexto: dict[str, Any]) -> None:
-        proyecto = contexto["proyecto"]
-        usuario_id = contexto["usuario_id"]
-        rol = contexto.get("rol")
-        if rol != "ADMIN" and usuario_id not in proyecto.get("miembros", []):
-            raise HTTPException(status_code=403, detail="Sin acceso al proyecto")
+class ValidadorNoOp(Validador):
+	async def validar(self, datos: Any) -> None:
+		return None
 
 
-class ValidadorPropietarioProyecto(ValidadorOperacion):
-    async def _validar(self, contexto: dict[str, Any]) -> None:
-        proyecto = contexto["proyecto"]
-        usuario_id = contexto["usuario_id"]
-        rol = contexto.get("rol")
-        if rol != "ADMIN" and proyecto.get("propietarioId") != usuario_id:
-            raise HTTPException(
-                status_code=403,
-                detail="Solo el propietario o un Admin puede ejecutar esta accion en el proyecto",
-            )
+def chain(*validadores: Optional[Validador]) -> Validador:
+	head: Validador | None = None
+	tail: Validador | None = None
+	for v in (validadores or []):
+		if v is None:
+			continue
+		if head is None:
+			head = v
+			tail = v
+		else:
+			assert tail is not None
+			tail.siguiente = v
+			tail = v
+	return head or ValidadorNoOp()
 
 
-class ValidadorProyectoArchivado(ValidadorOperacion):
-    async def _validar(self, contexto: dict[str, Any]) -> None:
-        proyecto = contexto["proyecto"]
-        estado = EstadoProyectoFactory.crear(proyecto.get("estado"))
-        if proyecto.get("estaArchivado") or not estado.puede_editar():
-            permitir_archivado = contexto.get("permitir_archivado", False)
-            if not permitir_archivado:
-                raise HTTPException(status_code=400, detail="El proyecto esta archivado o cerrado y es de solo lectura")
+class ValidadorTareaExiste(Validador):
+	async def validar(self, datos: Any) -> None:
+		db = datos.get("db") or ConexionMongoDB.obtener_instancia().obtener_base_datos()
+		tarea_id = datos.get("tarea_id")
+		tarea = await db["tareas"].find_one({"_id": tarea_id}) if tarea_id else None
+		if not tarea:
+			raise HTTPException(status_code=404, detail="Tarea no encontrada")
+		datos["tarea"] = tarea
+		datos["proyecto_id"] = tarea.get("proyectoId")
 
 
-class ValidadorTareaExiste(ValidadorOperacion):
-    async def _validar(self, contexto: dict[str, Any]) -> None:
-        db = contexto["db"]
-        tarea_id = contexto["tarea_id"]
-        tarea = await db["tareas"].find_one({"_id": tarea_id})
-        if not tarea:
-            raise HTTPException(status_code=404, detail="Tarea no encontrada")
-        contexto["tarea"] = tarea
-        contexto["proyecto_id"] = tarea.get("proyectoId")
+class ValidadorColumnaExiste(Validador):
+	async def validar(self, datos: Any) -> None:
+		db = datos.get("db") or ConexionMongoDB.obtener_instancia().obtener_base_datos()
+		columna_id = datos.get("columna_destino_id")
+		columna = await db["columnas"].find_one({"_id": columna_id}) if columna_id else None
+		if not columna:
+			raise HTTPException(status_code=404, detail="Columna destino no encontrada")
+		datos["columna_destino"] = columna
 
 
-class ValidadorWIP(ValidadorOperacion):
-    async def _validar(self, contexto: dict[str, Any]) -> None:
-        db = contexto["db"]
-        columna_destino_id = contexto.get("columna_destino_id")
-        if not columna_destino_id:
-            return
-        columna_destino = await db["columnas"].find_one({"_id": columna_destino_id})
-        if columna_destino and columna_destino.get("limiteWip"):
-            tareas_en_columna = await db["tareas"].count_documents({"columnaId": columna_destino_id})
-            if tareas_en_columna >= columna_destino["limiteWip"]:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Límite WIP alcanzado en '{columna_destino.get('nombre', columna_destino_id)}'",
-                )
+class ValidadorWIP(Validador):
+	async def validar(self, datos: Any) -> None:
+		db = datos.get("db") or ConexionMongoDB.obtener_instancia().obtener_base_datos()
+		columna = datos.get("columna_destino")
+		columna_id = datos.get("columna_destino_id")
+		if not columna and not columna_id:
+			return
+		limite = columna.get("limiteWip") if columna else None
+		if limite:
+			tareas_en_columna = await db["tareas"].count_documents({"columnaId": columna_id})
+			if tareas_en_columna >= limite:
+				raise HTTPException(status_code=400, detail=f"Límite WIP alcanzado en '{columna.get('nombre', columna_id)}'")
 
-
-class ValidadorSLA(ValidadorOperacion):
-    async def _validar(self, contexto: dict[str, Any]) -> None:
-        proyecto = contexto.get("proyecto")
-        if not proyecto or not proyecto.get("slaActivo"):
-            return
-        plazo = proyecto.get("slaPlazoHoras")
-        if plazo and plazo < 0:
-            raise HTTPException(status_code=400, detail="Configuración de SLA inválida")

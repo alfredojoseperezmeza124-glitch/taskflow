@@ -15,6 +15,8 @@ from app.patterns.adapter.apis_externas import (
     EmailAPI, EmailRequest,
     SmsAPI, SmsRequest,
 )
+from app.patterns.adapter.apis_externas import AnthropicAPI, OpenAIAPI
+import os
 
 
 class WhatsAppAdaptee(INotificacionAdapter):

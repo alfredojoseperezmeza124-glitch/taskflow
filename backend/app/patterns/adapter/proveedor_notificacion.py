@@ -41,7 +41,7 @@ class FabricaEmail(FabricaNotificacion):
 
 
 class FabricaSms(FabricaNotificacion):
-    """Fábrica concreta que crea un SmsAdaptee."""
+    """Fábrica concr coeta que crea un SmsAdaptee."""
 
     def create(self) -> INotificacionAdapter:
         return SmsAdaptee()

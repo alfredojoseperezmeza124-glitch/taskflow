@@ -1,12 +1,18 @@
+from __future__ import annotations
 import asyncio
 from typing import Any
-
 from app.patterns.command.command import Comando
 
 
 class CommandBus:
-    async def ejecutar(self, comando: Comando) -> Any:
-        return await comando.ejecutar()
+	async def dispatch(self, comando: Comando) -> Any:
+		return await comando.ejecutar()
 
-    def ejecutar_en_fondo(self, comando: Comando) -> asyncio.Task:
-        return asyncio.create_task(comando.ejecutar())
+	def dispatch_background(self, comando: Comando) -> asyncio.Task:
+		"""Ejecuta el comando en segundo plano y devuelve la tarea creada."""
+		return asyncio.create_task(comando.ejecutar())
+
+
+# Instancia compartida por conveniencia
+command_bus = CommandBus()
+

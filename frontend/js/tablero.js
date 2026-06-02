@@ -251,7 +251,7 @@ function tarjeta(t) {
       <div class="flex" style="gap:4px">
         <div class="avatar-group">${resps}</div>
         <button class="btn btn-ghost btn-xs" onclick="abrirPanelSubtareas('${t.id}','${t.titulo.replace(/'/g, "\\'")}')"
-          title="Subtareas y jerarquía" style="color:var(--a2)">
+          title="Subtareas y jerarquía (Builder + Composite)" style="color:var(--a2)">
           <i class="ph ph-tree-structure"></i>
         </button>
         <button class="btn btn-ghost btn-xs" onclick="abrirPanelComentarios('${t.id}','${t.titulo.replace(/'/g, "\\'")}')">

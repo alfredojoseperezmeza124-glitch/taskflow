@@ -633,7 +633,7 @@
       <div class="modal" style="width: 560px">
         <div class="modal-t">
           <i class="ph ph-stack" style="color: var(--a)"></i> Reglas por
-          proyecto
+          proyecto — Patrón Decorator
         </div>
         <input type="hidden" id="rdProyectoId" />
         <div
@@ -664,7 +664,8 @@
             "
           >
             <div>
-              <div style="font-size: 12px; font-weight: 500; color: var(--t1)">
+            </div>
+
                 Auditoría enriquecida
               </div>
               <div class="txt3" style="font-size: 11px">
@@ -827,6 +828,17 @@
 
     <div class="toast-wrap" id="toastWrap"></div>
 
+    <div class="overlay" id="mAsistenteProyecto">
+      <div class="modal" style="width: 900px; max-width: calc(100vw - 40px); height: 80vh;">
+        <div class="modal-t">
+          <i class="ph ph-sparkle" style="color: var(--a)"></i>
+          <span id="mAsistenteTitulo">Asistente</span>
+          <button class="btn btn-ghost" style="float:right" onclick="cerrarModal('mAsistenteProyecto')">Cerrar</button>
+        </div>
+        <div id="mAsistenteContenedor" style="padding:12px; height: calc(100% - 56px); overflow:auto"></div>
+      </div>
+    </div>
+
     <!-- SCRIPTS -->
     <!-- Configuración de entorno — cambia SOLO esta línea en producción -->
     <script>
@@ -834,13 +846,17 @@
       // En producción: https://tu-backend.railway.app/api/v1
       window.API_URL = "http://localhost:8000/api/v1";
     </script>
+    <!-- Core + Módulos (archivos reales del paquete) -->
     <script src="js/app.js"></script>
-    <script src="js/tablero.js"></script>
-    <script src="js/vistas.js"></script>
-    <script src="js/subtareas.js"></script>
     <script src="js/parches.js"></script>
+    <script src="js/vistas.js"></script>
     <script src="js/dashboard.js"></script>
+    <script src="js/tablero.js"></script>
+    <script src="js/subtareas.js"></script>
     <script src="js/configuracion.js"></script>
+    <!-- Módulos del asistente -->
+    <script src="js/asistente-proyecto.js"></script>
+    <!-- Aplicación Principal y Cargador -->
     <script src="js/loader.js"></script>
   </body>
 </html>

@@ -561,7 +561,9 @@ async function actualizarStatsLogin() {
   const el = document.getElementById("loginPatronesCount");
   if (!el) return;
   try {
-    const r = await fetch(`${API}/openapi.json`, { method: "GET" });
+    // API tiene prefijo /api/v1; OpenAPI está expuesto en /openapi.json (raíz del servidor)
+    const baseServer = (API || "").replace(/\/api\/v1\/?$/, "");
+    const r = await fetch(`${baseServer}/openapi.json`, { method: "GET" });
     if (!r.ok) throw new Error("No se pudo leer OpenAPI");
     const schema = await r.json();
     const descripcion = schema?.info?.description || "";

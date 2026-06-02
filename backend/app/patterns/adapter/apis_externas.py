@@ -220,3 +220,153 @@ class SmsAPI:
 
         print("  Falta configuración Twilio: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN y TWILIO_SMS_FROM")
         return SmsResponse(code=500, description="Twilio no configurado", message_id="")
+
+
+# ------------------ Wrappers para proveedores LLM ------------------
+try:
+    import openai as _openai
+except Exception:
+    _openai = None
+
+import httpx as _httpx
+try:
+    # google-genai package import path
+    import google.genai as _genai
+except Exception:
+    _genai = None
+
+
+class AnthropicAPI:
+    @staticmethod
+    def send_messages(payload: dict, api_key: str):
+        """Reenvía payload a Anthropic y devuelve JSON (sin levantar excepción)."""
+        if not api_key:
+            return {"error": "no_key"}
+        url = "https://api.anthropic.com/v1/messages"
+        headers = {"Content-Type": "application/json", "x-api-key": api_key}
+        try:
+            resp = _httpx.post(url, json=payload, headers=headers, timeout=30.0)
+            resp.raise_for_status()
+            return resp.json()
+        except _httpx.HTTPStatusError as e:
+            return {"error": "upstream_status", "status_code": e.response.status_code, "text": e.response.text}
+        except Exception as e:
+            return {"error": "proxy_error", "detail": str(e)}
+
+
+class OpenAIAPI:
+    @staticmethod
+    def send_messages(payload: dict, api_key: str):
+        """Llama a OpenAI ChatCompletion y devuelve el dict resultante.
+        payload expected: { model, messages:[{role,content}], max_tokens }
+        """
+        if not api_key or _openai is None:
+            return {"error": "openai_not_available"}
+        try:
+            _openai.api_key = api_key
+            msgs = payload.get("messages") or []
+            resp = _openai.ChatCompletion.create(
+                model=payload.get("model", "gpt-3.5-turbo"),
+                messages=msgs,
+                max_tokens=payload.get("max_tokens", 500),
+                temperature=payload.get("temperature", 0.2),
+            )
+            return dict(resp)
+        except Exception as e:
+            return {"error": "openai_error", "detail": str(e)}
+
+
+class GeminiAPI:
+    @staticmethod
+    def send_messages(payload: dict, api_key: str):
+        """Llama a la API REST de Gemini (v1beta) usando generateContent.
+        Compatible con gemini-2.5-flash, gemini-2.0-flash y modelos modernos.
+        Devuelve un dict con la clave 'text' en caso de éxito.
+        """
+        if not api_key:
+            return {"error": "no_key"}
+
+        # Modelos Gemini 2.x usan la API v1beta con generateContent
+        model = (payload.get("model") or "gemini-2.0-flash").replace("/", "-")
+
+        # Construir el prompt unificando system + mensajes
+        parts_text = []
+
+        # Si hay system prompt, incluirlo al inicio
+        system = payload.get("system")
+        if system:
+            parts_text.append(system)
+
+        # Agregar mensajes del historial
+        msgs = payload.get("messages") or []
+        for m in msgs:
+            role = (m.get("role") or "user").lower()
+            content = m.get("content") or ""
+            if role == "system":
+                parts_text.insert(0, content)
+            else:
+                parts_text.append(content)
+
+        prompt_text = "\n\n".join(parts_text) if parts_text else ""
+
+        # Body correcto para generateContent (API v1beta / Gemini 2.x)
+        body = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": prompt_text}]
+                }
+            ],
+            "generationConfig": {
+                "temperature": float(payload.get("temperature", 0.2)),
+                "maxOutputTokens": int(payload.get("max_tokens", 400)),
+            }
+        }
+
+        # Intentar primero v1beta (Gemini 2.x), luego v1 como fallback
+        endpoints = [
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+            f"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent",
+        ]
+
+        last_error = None
+        for ep in endpoints:
+            url = f"{ep}?key={api_key}"
+            try:
+                resp = _httpx.post(url, json=body, timeout=30.0)
+                if resp.status_code == 404:
+                    last_error = {"error": "upstream_status", "status_code": 404, "text": resp.text}
+                    continue
+                resp.raise_for_status()
+                j = resp.json()
+
+                # Extraer texto de la respuesta generateContent
+                # Estructura: candidates[0].content.parts[0].text
+                text = None
+                try:
+                    candidates = j.get("candidates") or []
+                    if candidates:
+                        content_obj = candidates[0].get("content") or {}
+                        parts = content_obj.get("parts") or []
+                        if parts and parts[0].get("text"):
+                            text = parts[0]["text"]
+                except Exception:
+                    pass
+
+                if text:
+                    return {"text": text}
+                # Si no se pudo extraer, devolver el JSON crudo como texto
+                return {"text": str(j)}
+
+            except _httpx.HTTPStatusError as e:
+                last_error = {
+                    "error": "upstream_status",
+                    "status_code": e.response.status_code,
+                    "text": e.response.text
+                }
+                continue
+            except Exception as e:
+                last_error = {"error": "proxy_error", "detail": str(e)}
+                continue
+
+        return last_error or {"error": "no_response"}

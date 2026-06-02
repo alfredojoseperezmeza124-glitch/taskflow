@@ -1,14 +1,24 @@
-from app.patterns.observer.observadores import (
-    ObservadorSSE,
-    ObservadorNotificacionInterna,
-    ObservadorAuditoria,
-    ObservadorNotificacionExterna,
-)
-from app.patterns.observer.eventos import EventoDominio
+from __future__ import annotations
+from typing import List
 
 
-def registrar_observadores(gestor_eventos) -> None:
-    gestor_eventos.registrar_observador(ObservadorSSE())
-    gestor_eventos.registrar_observador(ObservadorNotificacionInterna())
-    gestor_eventos.registrar_observador(ObservadorAuditoria())
-    gestor_eventos.registrar_observador(ObservadorNotificacionExterna())
+def registrar_observadores() -> List:
+	try:
+		from app.core.gestor_eventos import gestor_eventos
+		from app.patterns.observer.observadores import (
+			ObservadorSSE,
+			ObservadorNotificacionInterna,
+			ObservadorAuditoria,
+			ObservadorNotificacionExterna,
+		)
+		from app.services import servicio_notificacion as svc
+
+		return [
+			ObservadorSSE(),
+			ObservadorNotificacionInterna(),
+			ObservadorAuditoria(),
+			ObservadorNotificacionExterna(),
+		]
+	except Exception:
+		return []
+

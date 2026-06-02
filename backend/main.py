@@ -2,6 +2,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import traceback
 import logging
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger("taskflow")
@@ -11,7 +14,7 @@ from contextlib import asynccontextmanager
 
 from app.db.conexion import ConexionMongoDB
 from app.db.indices import crear_indices
-from app.routes import usuarios, proyectos, tableros, tareas, notificaciones, reportes, subtareas
+from app.routes import usuarios, proyectos, tableros, tareas, notificaciones, reportes, subtareas, assistant
 
 
 @asynccontextmanager
@@ -105,6 +108,7 @@ app.include_router(tareas.enrutador, prefix=PREFIJO)
 app.include_router(subtareas.enrutador, prefix=PREFIJO)
 app.include_router(notificaciones.enrutador, prefix=PREFIJO)
 app.include_router(reportes.enrutador, prefix=PREFIJO)
+app.include_router(assistant.enrutador, prefix=PREFIJO)
 
 
 @app.get("/", tags=["Salud"], summary="Estado de la API")
@@ -114,7 +118,6 @@ async def raiz():
         "version": "1.0.0",
         "docs": "/docs",
         "redoc": "/redoc",
-        "openapi": "/openapi.json",
     }
 
 

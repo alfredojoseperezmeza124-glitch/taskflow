@@ -5,6 +5,12 @@ _ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 
 
 class Configuracion(BaseSettings):
+    # Allow extra environment variables (e.g., OPENAI_API_KEY) and load .env
+    model_config = {
+        "extra": "ignore",
+        "env_file": str(_ENV_PATH),
+        "env_file_encoding": "utf-8",
+    }
     mongodb_url: str
     nombre_bd: str = "taskflow"
     clave_secreta_jwt: str
@@ -24,10 +30,5 @@ class Configuracion(BaseSettings):
     twilio_whatsapp_content_sid: str = None
     twilio_whatsapp_content_variables: str = None
     twilio_whatsapp_mensaje_key: str = "1"
-
-    class Config:
-        env_file = str(_ENV_PATH)
-        env_file_encoding = "utf-8"
-
 
 configuracion = Configuracion()
