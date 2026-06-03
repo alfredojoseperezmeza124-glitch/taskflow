@@ -10,6 +10,24 @@ let placeholder = null;
 let _estructuraTableroProyecto = null;
 let _subtareasEtapaKanban = [];
 
+/* ── Pool de usuarios para resolver avatares ─────────────────────── */
+function _fusionarUsuarios(miembros, activos) {
+  const mapa = new Map();
+  (miembros || []).forEach((u) => mapa.set(u.id || u._id, u));
+  (activos || []).forEach((u) => {
+    const uid = u.id || u._id;
+    if (!mapa.has(uid)) mapa.set(uid, u);
+  });
+  return mapa;
+}
+
+function _resolverUsuario(id) {
+  if (!id) return null;
+  const pool = window._usuariosPool;
+  if (pool instanceof Map) return pool.get(id) || null;
+  return (miembrosActuales || []).find((m) => m.id === id) || null;
+}
+
 function _escTablero(valor = "") {
   return String(valor)
     .replaceAll("&", "&amp;")
@@ -38,8 +56,9 @@ function _tarjetaSubtareaEtapaKanban(subtarea) {
   const resps = (subtarea.responsables || [])
     .slice(0, 3)
     .map((id) => {
-      const miembro = miembrosActuales.find((m) => m.id === id);
-      return `<div class="avatar avatar-sm" title="${_escTablero(miembro?.nombre || id)}">${inic(miembro?.nombre || "?")}</div>`;
+      const miembro = _resolverUsuario(id);
+      const nombre = miembro?.nombre || miembro?.name || null;
+      return `<div class="avatar avatar-sm" title="${_escTablero(nombre || id)}">${inic(nombre || id.slice(0, 2).toUpperCase())}</div>`;
     })
     .join("");
 
@@ -142,7 +161,7 @@ async function cargarTablero(proyId) {
   board.innerHTML =
     '<div class="vacío" style="width:100%"><span class="spinner"></span> Cargando...</div>';
   try {
-    const [tableros, miembros, estructura, subtareasEtapa] = await Promise.all([
+    const [tableros, miembros, estructura, subtareasEtapa, todosUsuarios] = await Promise.all([
       api("GET", `/proyectos/${proyId}/tableros`),
       api("GET", `/proyectos/${proyId}/miembros`).catch(() => []),
       cargarEstructuraProyecto(proyId).catch(() => ({
@@ -152,10 +171,15 @@ async function cargarTablero(proyId) {
         etapasPorId: {},
       })),
       api("GET", `/proyectos/${proyId}/subtareas-etapa`).catch(() => []),
+      api("GET", `/usuarios/activos`).catch(() => []),
     ]);
     _estructuraTableroProyecto = estructura;
     _subtareasEtapaKanban = Array.isArray(subtareasEtapa) ? subtareasEtapa : [];
-    miembrosActuales = miembros;
+    // Normalizar miembros del proyecto (siempre array)
+    miembrosActuales = Array.isArray(miembros) ? miembros : (miembros?.miembros || []);
+    // Pool ampliado: miembros del proyecto + todos los usuarios activos del sistema
+    // Permite mostrar avatares de responsables que no son miembros formales del proyecto
+    window._usuariosPool = _fusionarUsuarios(miembrosActuales, Array.isArray(todosUsuarios) ? todosUsuarios : []);
     if (!tableros.length) {
       board.innerHTML =
         '<div class="vacío" style="width:100%">Sin tableros</div>';
@@ -223,8 +247,9 @@ function tarjeta(t) {
   const resps = (t.responsables || [])
     .slice(0, 3)
     .map((id) => {
-      const m = miembrosActuales.find((m) => m.id === id);
-      return `<div class="avatar avatar-sm" title="${m?.nombre || id}">${inic(m?.nombre || "?")}</div>`;
+      const m = _resolverUsuario(id);
+      const nombre = m?.nombre || m?.name || null;
+      return `<div class="avatar avatar-sm" title="${nombre || id}">${inic(nombre || id.slice(0, 2).toUpperCase())}</div>`;
     })
     .join("");
 
@@ -424,3 +449,9 @@ async function confirmarAgregarColumna() {
     document.getElementById("colError").textContent = e.message;
   }
 }
+
+/* ── Refresco desde el asistente IA ────────────────────────────────── */
+window.addEventListener("taskflow:actualizar-tablero", (e) => {
+  const pId = (e.detail && e.detail.proyectoId) || proyActualId;
+  if (pId && typeof cargarTablero === "function") cargarTablero(pId);
+});

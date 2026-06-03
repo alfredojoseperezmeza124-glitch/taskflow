@@ -62,8 +62,11 @@ window.cargarTareasPaginadas = async function (proyId, pagina) {
       .map((t) => {
         const resps = (t.responsables || [])
           .map((id) => {
-            const m = miembrosActuales.find((m) => m.id === id);
-            return `<div class="avatar avatar-sm" title="${m?.nombre || id}">${inic(m?.nombre || "?")}</div>`;
+            const m = (typeof _resolverUsuario === "function")
+              ? _resolverUsuario(id)
+              : miembrosActuales.find((m) => m.id === id);
+            const nombre = m?.nombre || m?.name || null;
+            return `<div class="avatar avatar-sm" title="${nombre || id}">${inic(nombre || id.slice(0, 2).toUpperCase())}</div>`;
           })
           .join("");
 

@@ -31,7 +31,10 @@ window.renderAsistenteProyecto = async function (
   let ctxProyecto = null;
   let ctxTareas = [];
   let ctxMiembros = [];
-  let ctxColumnaId = null; // primera columna del tablero (cargada en cargarContexto)
+  let ctxColumnaId = null;      // primera columna del tablero (cargada en cargarContexto)
+  let ctxFases = [];            // fases del proyecto
+  let ctxEtapas = [];           // etapas de todas las fases
+  let ctxUsuarioActual = null;  // perfil del usuario autenticado que usa el asistente
 
   async function cargarContexto() {
     try {
@@ -41,19 +44,23 @@ window.renderAsistenteProyecto = async function (
       ]);
       ctxProyecto = proy;
 
-      // Normalizar tareas a array
+      // Normalizar tareas a array — el backend responde {datos:[...], pagina, ...}
       ctxTareas =
-        tareas?.tareas || tareas?.items || tareas?.data || tareas || [];
+        tareas?.datos ||      // ← formato real del backend
+        tareas?.tareas ||
+        tareas?.items ||
+        tareas?.data ||
+        (Array.isArray(tareas) ? tareas : null) ||
+        [];
       if (!Array.isArray(ctxTareas)) {
         const candidate =
+          tareas?.datos ||
           tareas?.tareas ||
           tareas?.items ||
           tareas?.data ||
           tareas?.results ||
           null;
         if (Array.isArray(candidate)) ctxTareas = candidate;
-        else if (tareas && typeof tareas === "object")
-          ctxTareas = Object.values(tareas).flat().filter(Boolean);
         else ctxTareas = [];
       }
 
@@ -114,6 +121,37 @@ window.renderAsistenteProyecto = async function (
         } catch (errTb) {
           console.warn("[Asistente] No se pudo cargar tablero:", errTb);
         }
+      }
+
+      // Cargar perfil del usuario autenticado
+      try {
+        const perfil = await get("/usuarios/perfil");
+        ctxUsuarioActual = perfil || null;
+        console.debug("[Asistente] usuario actual:", ctxUsuarioActual?.nombre, ctxUsuarioActual?.rol);
+      } catch (_) {
+        ctxUsuarioActual = null;
+      }
+
+      // Cargar fases y etapas del proyecto
+      try {
+        const fasesRes = await get(`/proyectos/${proyectoId}/fases`);
+        ctxFases = Array.isArray(fasesRes) ? fasesRes : fasesRes?.fases || [];
+        ctxEtapas = [];
+        for (const fase of ctxFases) {
+          try {
+            const faseId = fase._id || fase.id;
+            const etapasRes = await get(`/fases/${faseId}/etapas`);
+            const etapas = Array.isArray(etapasRes) ? etapasRes : etapasRes?.etapas || [];
+            etapas.forEach((e) => {
+              if (!e.faseId) e.faseId = faseId;
+            });
+            ctxEtapas.push(...etapas);
+          } catch (_) {}
+        }
+        console.debug("[Asistente] fases:", ctxFases.length, "etapas:", ctxEtapas.length);
+      } catch (_) {
+        ctxFases = [];
+        ctxEtapas = [];
       }
     } catch (e) {
       console.error("[Asistente] Error cargando contexto:", e);
@@ -185,12 +223,40 @@ window.renderAsistenteProyecto = async function (
       (t) => (t.tipo || "").toUpperCase() === "BUG",
     );
 
+    const usuarioActualInfo = ctxUsuarioActual
+      ? `${ctxUsuarioActual.nombre || ctxUsuarioActual.name || "?"} (${ctxUsuarioActual.rol || "?"}) — ID: ${ctxUsuarioActual.id || ctxUsuarioActual._id || "?"}`
+      : "desconocido";
+
+    const miembrosLista = ctxMiembros.length > 0
+      ? ctxMiembros
+          .map((m) => {
+            const nombre = m.nombre || m.name || m.username || m.email || m._id || m.id;
+            const rol = m.rol || "?";
+            const esTu = ctxUsuarioActual && (m._id || m.id) === (ctxUsuarioActual.id || ctxUsuarioActual._id);
+            return `${nombre} (${rol})${esTu ? " ← TÚ" : ""}`;
+          })
+          .join(", ")
+      : "ninguno";
+
+    const fasesEtapasTexto = ctxFases.length > 0
+      ? ctxFases.map((f) => {
+          const fId = f._id || f.id;
+          const etapas = ctxEtapas.filter((e) => e.faseId === fId);
+          const etapasTxt = etapas.length > 0
+            ? etapas.map((e) => `    - Etapa: "${e.nombre}"`).join("\n")
+            : "    (sin etapas)";
+          return `  Fase: "${f.nombre}"\n${etapasTxt}`;
+        }).join("\n")
+      : "  (sin fases definidas)";
+
     return `
+USUARIO ACTUAL (quien te está hablando): ${usuarioActualInfo}
+
 PROYECTO: ${ctxProyecto.nombre || "Sin nombre"}
 Descripción: ${ctxProyecto.descripcion || "Sin descripción"}
 Estado: ${ctxProyecto.estado || "Activo"}
 Fechas: ${ctxProyecto.fecha_inicio || "?"} → ${ctxProyecto.fecha_fin_estimada || "?"}
-Miembros: ${ctxMiembros.length} persona(s)
+Miembros del proyecto (${ctxMiembros.length}): ${miembrosLista}
 
 RESUMEN DE TAREAS (total: ${ctxTareas.length}):
 - Pendientes: ${tareasPendientes.length}
@@ -199,9 +265,9 @@ RESUMEN DE TAREAS (total: ${ctxTareas.length}):
 - Urgentes: ${urgentes.length}
 - Bugs abiertos: ${bugs.length}
 
-ÚLTIMAS TAREAS (máx. 15):
+TAREAS (para crear subtareas usa el título exacto o parcial):
 ${ctxTareas
-  .slice(0, 10)
+  .slice(0, 15)
   .map(
     (t) =>
       `• [${t.tipo || "TASK"}] "${t.titulo}" — ${t.estado || "?"} — ${t.prioridad || "?"}` +
@@ -210,6 +276,9 @@ ${ctxTareas
         : ""),
   )
   .join("\n")}
+
+ESTRUCTURA DE FASES Y ETAPAS:
+${fasesEtapasTexto}
     `.trim();
   }
 
@@ -217,13 +286,22 @@ ${ctxTareas
   async function preguntarIA(mensajes) {
     const contexto = construirContexto();
     const systemPrompt = `Eres el asistente inteligente del proyecto "${ctxProyecto?.nombre || "TaskFlow"}".
-Puedes responder preguntas sobre el proyecto Y ejecutar acciones reales sobre las tareas.
+Puedes responder preguntas sobre el proyecto Y ejecutar acciones reales sobre tareas y subtareas.
 
 == ACCIONES (responde con texto natural + JSON al final) ==
-CREAR: {"accion":"crear_tarea","titulo":"...","tipo":"TASK|BUG|FEATURE|IMPROVEMENT","prioridad":"BAJA|MEDIA|ALTA|URGENTE","descripcion":"...","fecha_vencimiento":"YYYY-MM-DD o null","asignado_a":"nombre o null"}
-ACTUALIZAR: {"accion":"actualizar_tarea","titulo_buscar":"...","cambios":{"estado":"TODO|IN_PROGRESS|DONE|BLOQUEADO","prioridad":"BAJA|MEDIA|ALTA|URGENTE","titulo":"...","descripcion":"...","responsables":["nombre o id"]}}
-ELIMINAR: {"accion":"eliminar_tarea","titulo_buscar":"..."} — pide confirmación antes.
+CREAR TAREA: {"accion":"crear_tarea","titulo":"...","tipo":"TASK|BUG|FEATURE|IMPROVEMENT","prioridad":"BAJA|MEDIA|ALTA|URGENTE","descripcion":"...","fecha_vencimiento":"YYYY-MM-DD o null","asignado_a":"nombre exacto del miembro o null"}
+ACTUALIZAR TAREA: {"accion":"actualizar_tarea","titulo_buscar":"nombre parcial de la tarea","cambios":{"estado":"TODO|IN_PROGRESS|DONE|BLOQUEADO","prioridad":"BAJA|MEDIA|ALTA|URGENTE","titulo":"...","descripcion":"...","responsables":["nombre del miembro"]}}
+ELIMINAR TAREA: {"accion":"eliminar_tarea","titulo_buscar":"..."} — pide confirmación antes.
+CREAR SUBTAREA DE TAREA: {"accion":"crear_subtarea","titulo":"...","tarea_buscar":"nombre parcial de la tarea padre","descripcion":"...","fecha_vencimiento":"YYYY-MM-DD o null","asignado_a":"nombre del miembro o null"}
+CREAR SUBTAREA DE ETAPA: {"accion":"crear_subtarea_etapa","titulo":"...","etapa_buscar":"nombre parcial de la etapa","descripcion":"...","fecha_vencimiento":"YYYY-MM-DD o null","asignado_a":"nombre del miembro o null"}
 DESHACER: {"accion":"deshacer"}
+
+NOTAS IMPORTANTES:
+- El CONTEXTO muestra quién es el usuario actual (quien te habla) con la etiqueta "← TÚ". Úsalo cuando digan "asígnalo a mí", "asígnalo a yo", o similar.
+- Usa "asignado_a" con el nombre exacto del miembro tal como aparece en la lista de miembros del contexto (incluye el rol entre paréntesis para diferenciar si hay homónimos).
+- Solo puedes asignar miembros que estén en la lista del proyecto. Si el nombre no coincide exactamente, deja "asignado_a": null y avisa.
+- Las subtareas viven DENTRO de una tarea o etapa existente, no son tareas independientes.
+- Para crear subtareas de una fase, usa crear_subtarea_etapa con el nombre de la etapa que pertenece a esa fase.
 Responde siempre en español, conciso.
 
 CONTEXTO ACTUAL DEL PROYECTO:
@@ -275,23 +353,80 @@ ${contexto}`;
     return "Sin respuesta.";
   }
 
+  /* ── Notificar al tablero que recargue datos ────────────────────── */
+  function notificarTablero() {
+    window.dispatchEvent(
+      new CustomEvent("taskflow:actualizar-tablero", { detail: { proyectoId } }),
+    );
+  }
+
+  /* ── Helper: normalizar texto eliminando tildes para comparación ─ */
+  function normalizar(str) {
+    return (str || "")
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .trim();
+  }
+
+  /* ── Helper: buscar miembro por nombre (tolera tildes y mayúsculas) */
+  function buscarMiembro(nombreBuscar) {
+    const q = normalizar(nombreBuscar);
+    if (!q) return null;
+
+    // Caso especial: pronombres de primera persona → usuario actual (solo si es miembro del proyecto)
+    const primeraPersona = ["yo", "mi", "me", "yo mismo", "myself", "a mi", "a mí"];
+    if (primeraPersona.includes(q) && ctxUsuarioActual) {
+      const uid = ctxUsuarioActual.id || ctxUsuarioActual._id;
+      const enProyecto = ctxMiembros.find((m) => (m._id || m.id) === uid);
+      return enProyecto || null; // Solo si es miembro del proyecto
+    }
+
+    return (
+      ctxMiembros.find((m) => {
+        const nombre = normalizar(
+          m.nombre || m.name || m.username || m.email || "",
+        );
+        return nombre.includes(q) || q.includes(nombre);
+      }) || null
+    );
+  }
+
   /* ── Helper: buscar tarea por nombre parcial ──────────────────── */
   function buscarTarea(titulo_buscar) {
-    const q = (titulo_buscar || "").toLowerCase().trim();
-    return ctxTareas.find((t) => t.titulo?.toLowerCase().includes(q)) || null;
+    const q = normalizar(titulo_buscar);
+    return (
+      ctxTareas.find(
+        (t) => t && t.titulo && normalizar(t.titulo).includes(q),
+      ) || null
+    );
+  }
+
+  /* ── Helper: buscar etapa por nombre parcial ─────────────────── */
+  function buscarEtapa(nombre_buscar) {
+    const q = normalizar(nombre_buscar);
+    return (
+      ctxEtapas.find(
+        (e) => e && e.nombre && normalizar(e.nombre).includes(q),
+      ) || null
+    );
   }
 
   /* ── Detectar y ejecutar acciones ──────────────────────────────── */
   async function ejecutarAccion(texto) {
-    // Buscar el último bloque JSON con "accion" en la respuesta
-    // Normalizar: extraer JSON de bloques ```json...``` también
+    // Buscar el último bloque JSON con "accion" en la respuesta.
+    // La regex maneja objetos anidados a 1 nivel (ej: cambios:{...}) usando
+    // (?:[^{}]|\{[^{}]*\})* que alterna caracteres normales con bloques {}.
     const textoNorm = texto.replace(/```[a-z]*\s*/g, "").replace(/```/g, "");
-    const matches = [...textoNorm.matchAll(/\{[\s\S]*?"accion"[\s\S]*?\}/g)];
+    const REGEX_JSON = /\{(?:[^{}]|\{[^{}]*\})*\}/g;
+    const matches = [...textoNorm.matchAll(REGEX_JSON)].filter((m) =>
+      m[0].includes('"accion"'),
+    );
     if (!matches.length) return null;
 
     let accion;
     try {
-      accion = JSON.parse(matches[matches.length - 1][0]); // already from textoNorm
+      accion = JSON.parse(matches[matches.length - 1][0]);
     } catch (_) {
       return null;
     }
@@ -309,12 +444,7 @@ ${contexto}`;
         const responsables = [];
         let nombreResuelto = null;
         if (accion.asignado_a) {
-          const q = accion.asignado_a.toLowerCase();
-          const miembro = ctxMiembros.find((m) =>
-            (m.nombre || m.name || m.username || m.email || "")
-              .toLowerCase()
-              .includes(q),
-          );
+          const miembro = buscarMiembro(accion.asignado_a);
           if (miembro) {
             responsables.push(miembro._id || miembro.id);
             nombreResuelto =
@@ -354,9 +484,18 @@ ${contexto}`;
 
         lastAction = { accion: "deshacer_creacion", tareaId: nuevaId };
         await cargarContexto();
+        notificarTablero();
+        const miembrosDisponibles = ctxMiembros
+          .map((m) => m.nombre || m.name || m.username || m.email)
+          .filter(Boolean)
+          .join(", ");
         const extras = [
           accion.fecha_vencimiento ? `vence ${accion.fecha_vencimiento}` : null,
-          nombreResuelto ? `asignada a ${nombreResuelto}` : null,
+          nombreResuelto
+            ? `asignada a ${nombreResuelto}`
+            : accion.asignado_a
+            ? `⚠️ no se encontró el miembro "${accion.asignado_a}" (disponibles: ${miembrosDisponibles || "ninguno"})`
+            : null,
         ]
           .filter(Boolean)
           .join(" · ");
@@ -432,39 +571,64 @@ ${contexto}`;
         }
 
         // Asignar responsables via endpoint dedicado si vienen en los cambios
+        let advertenciaResp = null;
         if (respIds !== undefined) {
-          // Resolver nombres a IDs si vienen como strings de nombre
           const idsResueltos = Array.isArray(respIds)
             ? respIds
                 .map((r) => {
-                  if (r.length === 36 || r.length === 24) return r; // ya es ID
-                  const m = ctxMiembros.find((m) =>
-                    (m.nombre || m.name || m.username || "")
-                      .toLowerCase()
-                      .includes(r.toLowerCase()),
-                  );
-                  return m ? m._id || m.id : r;
+                  if (typeof r === "string" && (r.length === 36 || r.length === 24)) return r;
+                  const m = buscarMiembro(r);
+                  if (!m) advertenciaResp = r; // guardamos el nombre que no se encontró
+                  return m ? m._id || m.id : null;
                 })
                 .filter(Boolean)
             : [];
-          await fetch(
-            BASE + "/tareas/" + (tarea._id || tarea.id) + "/responsables",
-            {
-              method: "PUT",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: "Bearer " + token,
+
+          if (idsResueltos.length > 0) {
+            const respResp = await fetch(
+              BASE + "/tareas/" + (tarea._id || tarea.id) + "/responsables",
+              {
+                method: "PUT",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: "Bearer " + token,
+                },
+                body: JSON.stringify({ responsables: idsResueltos }),
               },
-              body: JSON.stringify({ responsables: idsResueltos }),
-            },
-          );
+            );
+            if (!respResp.ok) {
+              const errBody = await respResp.json().catch(() => ({}));
+              return `⚠️ No se pudo asignar el responsable (${respResp.status}): ${errBody.detail || "error desconocido"}`;
+            }
+          }
         }
 
         await cargarContexto();
+        notificarTablero();
+        const miembrosDisponibles = ctxMiembros
+          .map((m) => m.nombre || m.name || m.username || m.email)
+          .filter(Boolean)
+          .join(", ");
         const resumen = Object.entries(cambiosMapeados)
+          .filter(([k]) => k !== "responsables")
           .map(([k, v]) => `${k} → ${v}`)
           .join(", ");
-        return `✅ Tarea "${tarea.titulo}" actualizada: ${resumen}`;
+        if (advertenciaResp) {
+          return `⚠️ No se encontró el miembro "${advertenciaResp}". Miembros disponibles: ${miembrosDisponibles || "ninguno"}. Los demás cambios sí se aplicaron${resumen ? ": " + resumen : ""}.`;
+        }
+        const respNombres = Array.isArray(cambiosMapeados.responsables)
+          ? cambiosMapeados.responsables
+              .map((r) => {
+                const m = buscarMiembro(r);
+                return m ? m.nombre || m.name || r : r;
+              })
+              .join(", ")
+          : null;
+        const partes = [
+          resumen || null,
+          respNombres ? `responsable(s) → ${respNombres}` : null,
+        ].filter(Boolean).join(", ");
+        return `✅ Tarea "${tarea.titulo}" actualizada${partes ? ": " + partes : ""}.`;
       } catch (_) {
         return "⚠️ No pude actualizar la tarea.";
       }
@@ -492,6 +656,96 @@ ${contexto}`;
       }
     }
 
+    // ── CREAR SUBTAREA DE TAREA ──────────────────────────────────────────
+    if (accion.accion === "crear_subtarea") {
+      const tarea = buscarTarea(accion.tarea_buscar);
+      if (!tarea)
+        return `⚠️ No encontré ninguna tarea que coincida con "${accion.tarea_buscar}".`;
+
+      const responsables = [];
+      let nombreResuelto = null;
+      if (accion.asignado_a) {
+        const miembro = buscarMiembro(accion.asignado_a);
+        if (miembro) {
+          responsables.push(miembro._id || miembro.id);
+          nombreResuelto = miembro.nombre || miembro.name || accion.asignado_a;
+        }
+      }
+
+      try {
+        const payload = {
+          titulo: accion.titulo,
+          descripcion: accion.descripcion || "",
+          responsables,
+          ...(accion.fecha_vencimiento
+            ? { fechaVencimiento: accion.fecha_vencimiento }
+            : {}),
+        };
+        const subtarea = await post(
+          `/tareas/${tarea._id || tarea.id}/subtareas`,
+          payload,
+        );
+        lastAction = {
+          accion: "deshacer_creacion_subtarea",
+          subtareaId: subtarea.id || subtarea._id,
+        };
+        const extras = [
+          accion.fecha_vencimiento ? `vence ${accion.fecha_vencimiento}` : null,
+          nombreResuelto ? `asignada a ${nombreResuelto}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        return `✅ Subtarea creada: "${accion.titulo}" en la tarea "${tarea.titulo}"${extras ? " — " + extras : ""}`;
+      } catch (_) {
+        return "⚠️ No pude crear la subtarea. Verifica que tengas permisos.";
+      }
+    }
+
+    // ── CREAR SUBTAREA DE ETAPA ──────────────────────────────────────────
+    if (accion.accion === "crear_subtarea_etapa") {
+      const etapa = buscarEtapa(accion.etapa_buscar);
+      if (!etapa)
+        return `⚠️ No encontré ninguna etapa que coincida con "${accion.etapa_buscar}". Las etapas disponibles son: ${ctxEtapas.map((e) => `"${e.nombre}"`).join(", ") || "ninguna"}`;
+
+      const responsables = [];
+      let nombreResuelto = null;
+      if (accion.asignado_a) {
+        const miembro = buscarMiembro(accion.asignado_a);
+        if (miembro) {
+          responsables.push(miembro._id || miembro.id);
+          nombreResuelto = miembro.nombre || miembro.name || accion.asignado_a;
+        }
+      }
+
+      try {
+        const payload = {
+          titulo: accion.titulo,
+          descripcion: accion.descripcion || "",
+          responsables,
+          ...(accion.fecha_vencimiento
+            ? { fechaVencimiento: accion.fecha_vencimiento }
+            : {}),
+        };
+        const subtarea = await post(
+          `/etapas/${etapa._id || etapa.id}/subtareas`,
+          payload,
+        );
+        lastAction = {
+          accion: "deshacer_creacion_subtarea",
+          subtareaId: subtarea.id || subtarea._id,
+        };
+        const extras = [
+          accion.fecha_vencimiento ? `vence ${accion.fecha_vencimiento}` : null,
+          nombreResuelto ? `asignada a ${nombreResuelto}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        return `✅ Subtarea creada: "${accion.titulo}" en la etapa "${etapa.nombre}"${extras ? " — " + extras : ""}`;
+      } catch (_) {
+        return "⚠️ No pude crear la subtarea en la etapa. Verifica que tengas permisos.";
+      }
+    }
+
     // ── DESHACER ─────────────────────────────────────────────────────────
     if (accion.accion === "deshacer") {
       if (!lastAction)
@@ -510,6 +764,16 @@ ${contexto}`;
           });
           await cargarContexto();
           return "↩️ Acción deshecha: la tarea recién creada fue eliminada.";
+        }
+
+        if (la.accion === "deshacer_creacion_subtarea") {
+          if (!la.subtareaId)
+            return "⚠️ No tengo el ID de la subtarea creada para eliminarla.";
+          await fetch(BASE + "/subtareas/" + la.subtareaId, {
+            method: "DELETE",
+            headers: { Authorization: "Bearer " + token },
+          });
+          return "↩️ Acción deshecha: la subtarea recién creada fue eliminada.";
         }
 
         if (la.accion === "deshacer_actualizacion") {
@@ -559,9 +823,9 @@ ${contexto}`;
   const SUGERENCIAS = [
     "¿Cómo va el proyecto?",
     "¿Qué tareas están urgentes?",
-    "¿Cuántos bugs hay abiertos?",
-    "Crea una tarea de revisión de código",
-    "¿Qué debería priorizar hoy?",
+    "Crea una subtarea de pruebas unitarias en la tarea de login",
+    "Crea una tarea de revisión de código y asígnala a Juan",
+    "Asigna la tarea de diseño al primer miembro del equipo",
     "Muéstrame las tareas en progreso",
   ];
 
@@ -1015,12 +1279,16 @@ ${contexto}`;
       const resultadoAccion = await ejecutarAccion(respTexto);
 
       if (resultadoAccion) {
-        // Mostrar mensaje limpio (sin el JSON técnico)
+        // Mostrar mensaje limpio (sin el JSON técnico).
+        // Usa la misma regex que en ejecutarAccion para manejar objetos anidados.
+        const REGEX_JSON_ACCION = /\{(?:[^{}]|\{[^{}]*\})*\}/g;
         const textoLimpio = respTexto
-          // Quitar bloques ```json ... ``` que contengan "accion"
-          .replace(/```[a-z]*\s*\{[\s\S]*?"accion"[\s\S]*?\}\s*```/g, "")
+          // Quitar bloques ```...``` que contengan JSON con "accion"
+          .replace(/```[a-z]*\s*\{(?:[^{}]|\{[^{}]*\})*\}\s*```/g, (m) =>
+            m.includes('"accion"') ? "" : m,
+          )
           // Quitar JSON suelto con "accion"
-          .replace(/\{[\s\S]*?"accion"[\s\S]*?\}/g, "")
+          .replace(REGEX_JSON_ACCION, (m) => (m.includes('"accion"') ? "" : m))
           // Limpiar fences vacíos que queden
           .replace(/```[a-z]*\s*```/g, "")
           .trim();
