@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Dict
 from app.patterns.adapter.iai_adapter import IAIAdapter
 from app.patterns.adapter.ia_adaptees import AnthropicAdaptee, OpenAIAdaptee
-from app.patterns.adapter.ia_adaptees import GeminiAdaptee
+from app.patterns.adapter.ia_adaptees import GeminiAdaptee, GroqAdaptee
 
 
 class FabricaIA(ABC):
@@ -26,6 +26,11 @@ class FabricaGemini(FabricaIA):
         return GeminiAdaptee()
 
 
+class FabricaGroq(FabricaIA):
+    def create(self) -> IAIAdapter:
+        return GroqAdaptee()
+
+
 class ProveedorIA:
     """Factory provider for LLM adapters. Use `get(provider)` to obtain a factory,
     then call `.create()` to get an adapter instance.
@@ -36,6 +41,7 @@ class ProveedorIA:
             "anthropic": FabricaAnthropic(),
             "openai": FabricaOpenAI(),
             "gemini": FabricaGemini(),
+            "groq": FabricaGroq(),
         }
 
     def get(self, provider: str) -> FabricaIA:
@@ -43,8 +49,10 @@ class ProveedorIA:
         if p == "auto":
             # decide based on env availability
             import os
-            # prefer Gemini if present, then Anthropic, then OpenAI
-            if os.environ.get("GEMINI_API_KEY"):
+            # prefer Groq if present (gratuito y rápido), luego Gemini, Anthropic, OpenAI
+            if os.environ.get("GROQ_API_KEY"):
+                p = "groq"
+            elif os.environ.get("GEMINI_API_KEY"):
                 p = "gemini"
             elif os.environ.get("ANTHROPIC_API_KEY"):
                 p = "anthropic"
@@ -53,5 +61,5 @@ class ProveedorIA:
 
         fabrica = self._fabricas.get(p)
         if not fabrica:
-            raise ValueError(f"Proveedor IA '{provider}' no soportado. Use 'anthropic' o 'openai' or 'auto'.")
+            raise ValueError(f"Proveedor IA '{provider}' no soportado. Use 'anthropic', 'openai', 'gemini', 'groq' o 'auto'.")
         return fabrica

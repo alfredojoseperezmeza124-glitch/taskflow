@@ -9,7 +9,6 @@ import json
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 STORE_PATH = os.path.join(BASE_DIR, "data", "assistant_index.pkl")
-HISTORY_PATH = os.path.join(BASE_DIR, "data", "chat_history.json")
 
 
 class VectorAssistant:
@@ -97,86 +96,6 @@ class VectorAssistant:
         except Exception:
             return str(data)
 
-    # ── Historial de chat ──────────────────────────────────────────────────
-
-    def _load_history(self) -> Dict[str, List[Dict[str, Any]]]:
-        """Carga el historial completo desde disco. Devuelve dict {session_id: [mensajes]}."""
-        if os.path.exists(HISTORY_PATH):
-            try:
-                with open(HISTORY_PATH, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, OSError):
-                pass
-        return {}
-
-    def _save_history(self, history: Dict[str, List[Dict[str, Any]]]) -> None:
-        """Persiste el historial completo en disco."""
-        try:
-            with open(HISTORY_PATH, "w", encoding="utf-8") as f:
-                json.dump(history, f, ensure_ascii=False, indent=2)
-        except OSError:
-            pass
-
-    def save_message(self, session_id: str, role: str, text: str) -> Dict[str, Any]:
-        """Guarda un mensaje en el historial de la sesion indicada.
-
-        Args:
-            session_id: Identificador de la conversacion (ej. el id del proyecto).
-            role:       "user" o "assistant".
-            text:       Contenido del mensaje.
-
-        Returns:
-            El mensaje guardado con su timestamp.
-        """
-        import datetime
-
-        history = self._load_history()
-        if session_id not in history:
-            history[session_id] = []
-
-        message = {
-            "role": role,
-            "text": text,
-            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
-        }
-        history[session_id].append(message)
-
-        # Limitar a los ultimos 200 mensajes por sesion para evitar crecimiento infinito
-        if len(history[session_id]) > 200:
-            history[session_id] = history[session_id][-200:]
-
-        self._save_history(history)
-        return message
-
-    def get_history(self, session_id: str, limit: int = 200) -> List[Dict[str, Any]]:
-        """Devuelve los ultimos limit mensajes de una sesion.
-
-        Args:
-            session_id: Identificador de la conversacion.
-            limit:      Numero maximo de mensajes a devolver.
-
-        Returns:
-            Lista de mensajes ordenados del mas antiguo al mas reciente.
-        """
-        history = self._load_history()
-        messages = history.get(session_id, [])
-        return messages[-limit:] if limit else messages
-
-    def delete_history(self, session_id: str) -> bool:
-        """Elimina el historial completo de una sesion.
-
-        Returns:
-            True si existia y fue borrado, False si no existia.
-        """
-        history = self._load_history()
-        if session_id in history:
-            del history[session_id]
-            self._save_history(history)
-            return True
-        return False
-
-    # ── Respuesta RAG ──────────────────────────────────────────────────────
-
     def answer(self, query_text: str, k: int = 3) -> Dict[str, Any]:
         """Realiza la búsqueda vectorial y, si hay proveedor LLM configurado,
         genera una respuesta natural usando el proveedor seleccionado via Factory+Adapter.
@@ -212,8 +131,10 @@ class VectorAssistant:
 
         # Seleccionar modelo según proveedor activo
         nombre_fabrica = type(fabrica).__name__
-        if "Gemini" in nombre_fabrica:
-            modelo = "gemini-2.0-flash"
+        if "Groq" in nombre_fabrica:
+            modelo = "llama-3.3-70b-versatile"
+        elif "Gemini" in nombre_fabrica:
+            modelo = "gemini-3.5-flash"
         elif "Anthropic" in nombre_fabrica:
             modelo = "claude-haiku-4-5-20251001"
         else:
@@ -221,7 +142,7 @@ class VectorAssistant:
 
         payload = {
             "model": modelo,
-            "max_tokens": 400,
+            "max_tokens": 2048,
             "temperature": 0.2,
             "system": system,
             "messages": [{"role": "user", "content": prompt}],

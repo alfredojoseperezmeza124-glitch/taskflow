@@ -114,10 +114,7 @@ async def upload_file(file: UploadFile = File(...), session_id: str = Form(None)
 
 @enrutador.post("/assistant/proxy_anthropic", tags=["Assistant"], summary="Proxy LLM (Factory+Adapter)")
 async def proxy_anthropic(payload: Dict[str, Any]):
-    """Proxy LLM que selecciona un proveedor vía ProveedorIA.
-    El modelo se asigna automáticamente según el proveedor activo,
-    ignorando cualquier modelo hardcodeado que venga del frontend.
-    """
+
     provider_env = os.environ.get("LLM_PROVIDER", "auto")
     proveedor = ProveedorIA()
     try:
@@ -126,13 +123,14 @@ async def proxy_anthropic(payload: Dict[str, Any]):
         try:
             fabrica = proveedor.get("auto")
         except ValueError:
-            return {"error": "No hay proveedor configurado. Configure GEMINI_API_KEY, ANTHROPIC_API_KEY u OPENAI_API_KEY en el servidor."}
+            return {"error": "No hay proveedor configurado. Configure GROQ_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY u OPENAI_API_KEY en el servidor."}
 
     # Sobrescribir el modelo según el proveedor activo
-    # Esto evita que el frontend mande un modelo incorrecto (ej: claude-* a Gemini)
     nombre_fabrica = type(fabrica).__name__
-    if "Gemini" in nombre_fabrica:
-        payload["model"] = "gemini-3.5-flash"
+    if "Groq" in nombre_fabrica:
+        payload["model"] = "llama-3.3-70b-versatile"
+    elif "Gemini" in nombre_fabrica:
+        payload["model"] = "gemini-2.0-flash"
     elif "Anthropic" in nombre_fabrica:
         payload["model"] = "claude-haiku-4-5-20251001"
     else:

@@ -370,3 +370,71 @@ class GeminiAPI:
                 continue
 
         return last_error or {"error": "no_response"}
+
+
+class GroqAPI:
+    """
+    Llama a la API de Groq (compatible con el formato OpenAI ChatCompletion).
+    Modelos recomendados: llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768
+    API gratuita: https://console.groq.com
+    """
+
+    @staticmethod
+    def send_messages(payload: dict, api_key: str):
+        if not api_key:
+            return {"error": "no_key"}
+
+        model = payload.get("model") or "llama-3.3-70b-versatile"
+
+        # Construir lista de mensajes en formato OpenAI
+        messages = []
+        system = payload.get("system")
+        if system:
+            messages.append({"role": "system", "content": system})
+
+        for m in payload.get("messages") or []:
+            role = (m.get("role") or "user").lower()
+            content = m.get("content") or ""
+            if role == "system":
+                # Insertar al inicio si viene como mensaje
+                messages.insert(0, {"role": "system", "content": content})
+            else:
+                messages.append({"role": role, "content": content})
+
+        body = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": int(payload.get("max_tokens", 2048)),
+            "temperature": float(payload.get("temperature", 0.2)),
+        }
+
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        }
+
+        try:
+            resp = _httpx.post(url, json=body, headers=headers, timeout=30.0)
+            resp.raise_for_status()
+            j = resp.json()
+
+            # Formato OpenAI: choices[0].message.content
+            text = None
+            try:
+                text = j["choices"][0]["message"]["content"]
+            except (KeyError, IndexError):
+                pass
+
+            if text:
+                return {"text": text}
+            return {"text": str(j)}
+
+        except _httpx.HTTPStatusError as e:
+            return {
+                "error": "upstream_status",
+                "status_code": e.response.status_code,
+                "text": e.response.text,
+            }
+        except Exception as e:
+            return {"error": "proxy_error", "detail": str(e)}

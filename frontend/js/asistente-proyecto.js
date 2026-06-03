@@ -31,20 +31,20 @@ window.renderAsistenteProyecto = async function (
   let ctxProyecto = null;
   let ctxTareas = [];
   let ctxMiembros = [];
+  let ctxColumnaId = null; // primera columna del tablero (cargada en cargarContexto)
 
   async function cargarContexto() {
     try {
       const [proy, tareas] = await Promise.all([
         get("/proyectos/" + proyectoId),
-        // ruta correcta para listar tareas de un proyecto
         get(`/proyectos/${proyectoId}/tareas?limite=100`),
       ]);
       ctxProyecto = proy;
-      // Normalizar posibles formatos de respuesta a un array de tareas
+
+      // Normalizar tareas a array
       ctxTareas =
         tareas?.tareas || tareas?.items || tareas?.data || tareas || [];
       if (!Array.isArray(ctxTareas)) {
-        // Intentar extraer un array de propiedades conocidas o convertir valores a array
         const candidate =
           tareas?.tareas ||
           tareas?.items ||
@@ -56,8 +56,68 @@ window.renderAsistenteProyecto = async function (
           ctxTareas = Object.values(tareas).flat().filter(Boolean);
         else ctxTareas = [];
       }
-      ctxMiembros = proy.miembros || [];
-    } catch (_) {}
+
+      // miembros es array de IDs — cargar objetos completos para poder buscar por nombre
+      const miembroIds =
+        proy.miembros || proy.integrantes || proy.members || [];
+      if (miembroIds.length > 0) {
+        try {
+          const usersRes = await get(`/proyectos/${proyectoId}/miembros`);
+          console.debug(
+            "[Asistente] /miembros raw:",
+            JSON.stringify(usersRes).slice(0, 500),
+          );
+          // Normalizar: puede ser array directo, o {miembros:[...]}, o [{usuario:{...},rol},...]
+          const lista = Array.isArray(usersRes)
+            ? usersRes
+            : usersRes?.miembros || usersRes?.usuarios || usersRes?.items || [];
+          // Cada elemento puede ser {usuario:{_id,nombre,...}, rol} o {_id, nombre, ...} directo
+          ctxMiembros = lista
+            .map((m) => m.usuario || m.user || m)
+            .filter((m) => m && typeof m === "object" && (m._id || m.id));
+          console.debug(
+            "[Asistente] ctxMiembros resueltos:",
+            ctxMiembros.map((m) => ({
+              id: m._id || m.id,
+              nombre: m.nombre || m.name || m.username || m.email,
+            })),
+          );
+        } catch (e) {
+          console.warn("[Asistente] Error cargando miembros:", e);
+          ctxMiembros = miembroIds.map((id) => ({ _id: id, id }));
+        }
+      } else {
+        ctxMiembros = [];
+      }
+
+      // Cargar columnaId una sola vez si no lo tenemos aún
+      if (!ctxColumnaId) {
+        try {
+          // GET /proyectos/:id/tableros devuelve lista con columnas incluidas
+          const tableros = await get(`/proyectos/${proyectoId}/tableros`);
+          const lista =
+            tableros?.tableros ||
+            tableros?.items ||
+            (Array.isArray(tableros) ? tableros : []);
+          console.debug(
+            "[Asistente] tableros:",
+            lista.length,
+            JSON.stringify(lista).slice(0, 300),
+          );
+          if (lista.length > 0) {
+            const tablero = lista[0];
+            // Las columnas vienen dentro del tablero directamente, sin segundo fetch
+            const columnas = tablero?.columnas || tablero?.columns || [];
+            ctxColumnaId = columnas[0]?._id || columnas[0]?.id || null;
+            console.debug("[Asistente] columnaId cargado:", ctxColumnaId);
+          }
+        } catch (errTb) {
+          console.warn("[Asistente] No se pudo cargar tablero:", errTb);
+        }
+      }
+    } catch (e) {
+      console.error("[Asistente] Error cargando contexto:", e);
+    }
   }
 
   await cargarContexto();
@@ -141,12 +201,12 @@ RESUMEN DE TAREAS (total: ${ctxTareas.length}):
 
 ÚLTIMAS TAREAS (máx. 15):
 ${ctxTareas
-  .slice(0, 15)
+  .slice(0, 10)
   .map(
     (t) =>
-      `• [${t.tipo || "TASK"}] "${t.titulo}" — ${t.estado || "?"} — Prioridad: ${t.prioridad || "?"}` +
-      (t.fecha_vencimiento
-        ? ` — Vence: ${t.fecha_vencimiento.split("T")[0]}`
+      `• [${t.tipo || "TASK"}] "${t.titulo}" — ${t.estado || "?"} — ${t.prioridad || "?"}` +
+      (t.fechaVencimiento
+        ? ` — Vence: ${t.fechaVencimiento.toString().split("T")[0]}`
         : ""),
   )
   .join("\n")}
@@ -159,27 +219,12 @@ ${ctxTareas
     const systemPrompt = `Eres el asistente inteligente del proyecto "${ctxProyecto?.nombre || "TaskFlow"}".
 Puedes responder preguntas sobre el proyecto Y ejecutar acciones reales sobre las tareas.
 
-== ACCIONES DISPONIBLES ==
-Cuando el usuario pida una acción, responde con un mensaje natural en español Y un bloque JSON al final.
-
---- CREAR TAREA ---
-{"accion":"crear_tarea","titulo":"...","tipo":"TASK|BUG|FEATURE|IMPROVEMENT","prioridad":"BAJA|MEDIA|ALTA|URGENTE","descripcion":"...","fecha_vencimiento":"YYYY-MM-DD o null","asignado_a":"nombre o null"}
-
---- ACTUALIZAR TAREA (uno o varios campos a la vez) ---
-{"accion":"actualizar_tarea","titulo_buscar":"...","cambios":{"estado":"TODO|IN_PROGRESS|DONE|BLOQUEADO","prioridad":"BAJA|MEDIA|ALTA|URGENTE","titulo":"...","descripcion":"..."}}
-
---- ELIMINAR TAREA ---
-{"accion":"eliminar_tarea","titulo_buscar":"..."}
-
---- DESHACER ÚLTIMA ACCIÓN ---
-{"accion":"deshacer"}
-
-== REGLAS ==
-- Antes de ELIMINAR, SIEMPRE pide confirmación explícita: "¿Estás seguro que quieres eliminar la tarea \"[nombre]\"? Responde \"confirmar\" para continuar." NO incluyas el JSON de eliminar hasta que el usuario confirme.
-- Para crear o actualizar, ejecuta directamente sin pedir confirmación.
-- Si el usuario escribe "deshacer" o "undo", usa {"accion":"deshacer"}.
-- Si no encuentras la tarea, menciona nombres similares disponibles.
-- Responde siempre en español, de forma concisa y útil.
+== ACCIONES (responde con texto natural + JSON al final) ==
+CREAR: {"accion":"crear_tarea","titulo":"...","tipo":"TASK|BUG|FEATURE|IMPROVEMENT","prioridad":"BAJA|MEDIA|ALTA|URGENTE","descripcion":"...","fecha_vencimiento":"YYYY-MM-DD o null","asignado_a":"nombre o null"}
+ACTUALIZAR: {"accion":"actualizar_tarea","titulo_buscar":"...","cambios":{"estado":"TODO|IN_PROGRESS|DONE|BLOQUEADO","prioridad":"BAJA|MEDIA|ALTA|URGENTE","titulo":"...","descripcion":"...","responsables":["nombre o id"]}}
+ELIMINAR: {"accion":"eliminar_tarea","titulo_buscar":"..."} — pide confirmación antes.
+DESHACER: {"accion":"deshacer"}
+Responde siempre en español, conciso.
 
 CONTEXTO ACTUAL DEL PROYECTO:
 ${contexto}`;
@@ -187,7 +232,7 @@ ${contexto}`;
     // Enviar a través del proxy del backend para evitar CORS y proteger la API key
     const payload = {
       model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
+      max_tokens: 2048,
       system: systemPrompt,
       messages: mensajes,
     };
@@ -202,6 +247,13 @@ ${contexto}`;
 
     if (!data) throw new Error("Respuesta vacía del proxy");
     if (data.error) throw new Error(JSON.stringify(data));
+    // Detectar respuesta cortada por MAX_TOKENS (Gemini devuelve text vacío)
+    const finishReason = data?.candidates?.[0]?.finishReason;
+    if (finishReason === "MAX_TOKENS") {
+      throw new Error(
+        "La respuesta fue cortada (MAX_TOKENS). El contexto del proyecto es demasiado largo.",
+      );
+    }
 
     // OpenAI ChatCompletion format
     if (
@@ -247,41 +299,27 @@ ${contexto}`;
     // ── CREAR TAREA ───────────────────────────────────────────────────────
     if (accion.accion === "crear_tarea") {
       try {
-        let columnaId = null;
-        try {
-          const tableros = await get("/tableros?proyectoId=" + proyectoId);
-          const lista =
-            tableros.tableros ||
-            tableros.items ||
-            (Array.isArray(tableros) ? tableros : []);
-          console.debug(
-            "[Asistente] tableros encontrados:",
-            lista.length,
-            lista,
-          );
-          if (lista.length > 0) {
-            const tb = await get("/tableros/" + (lista[0]._id || lista[0].id));
-            console.debug("[Asistente] tablero detalle:", tb);
-            columnaId = tb.columnas?.[0]?._id || tb.columnas?.[0]?.id || null;
-            console.debug("[Asistente] columnaId resuelto:", columnaId);
-          }
-        } catch (errTablero) {
-          console.warn("[Asistente] Error obteniendo tablero:", errTablero);
-        }
-
-        // columnaId es OBLIGATORIO en el schema — si no se obtuvo, lanzar error claro
+        // Usar columnaId ya cargado al iniciar; si aún no está, intentar cargarlo ahora
+        if (!ctxColumnaId) await cargarContexto();
+        const columnaId = ctxColumnaId;
         if (!columnaId)
-          return "⚠️ No se pudo obtener la columna del tablero. Verifica que el proyecto tenga un tablero con columnas.";
+          return "⚠️ No se pudo obtener la columna del tablero. Verifica que el proyecto tenga un tablero con columnas creadas.";
 
-        // Construir responsables: si Claude indicó un nombre, buscar el ID en los miembros del proyecto
+        // Resolver nombre → ID del responsable
         const responsables = [];
+        let nombreResuelto = null;
         if (accion.asignado_a) {
+          const q = accion.asignado_a.toLowerCase();
           const miembro = ctxMiembros.find((m) =>
-            (m.nombre || m.name || "")
+            (m.nombre || m.name || m.username || m.email || "")
               .toLowerCase()
-              .includes(accion.asignado_a.toLowerCase()),
+              .includes(q),
           );
-          if (miembro) responsables.push(miembro._id || miembro.id);
+          if (miembro) {
+            responsables.push(miembro._id || miembro.id);
+            nombreResuelto =
+              miembro.nombre || miembro.name || accion.asignado_a;
+          }
         }
 
         const payload = {
@@ -298,15 +336,27 @@ ${contexto}`;
             : {}),
         };
         const nueva = await post("/tareas", payload);
-        // Guardar para posible deshacer
-        lastAction = {
-          accion: "deshacer_creacion",
-          tareaId: nueva?._id || nueva?.id,
-        };
+        const nuevaId = nueva?.id || nueva?._id;
+
+        // Si hay responsable y la creación no lo incluyó, asignarlo via endpoint dedicado
+        if (responsables.length > 0 && nuevaId) {
+          try {
+            await fetch(BASE + "/tareas/" + nuevaId + "/responsables", {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + token,
+              },
+              body: JSON.stringify({ responsables }),
+            });
+          } catch (_) {}
+        }
+
+        lastAction = { accion: "deshacer_creacion", tareaId: nuevaId };
         await cargarContexto();
         const extras = [
           accion.fecha_vencimiento ? `vence ${accion.fecha_vencimiento}` : null,
-          accion.asignado_a ? `asignada a ${accion.asignado_a}` : null,
+          nombreResuelto ? `asignada a ${nombreResuelto}` : null,
         ]
           .filter(Boolean)
           .join(" · ");
@@ -366,14 +416,50 @@ ${contexto}`;
       };
 
       try {
-        await fetch(BASE + "/tareas/" + tarea._id, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + token,
-          },
-          body: JSON.stringify(cambiosMapeados),
-        });
+        // Separar responsables (endpoint propio) del resto de campos
+        const { responsables: respIds, ...camposSinResp } = cambiosMapeados;
+
+        // Actualizar campos normales si hay algo más allá de responsables
+        if (Object.keys(camposSinResp).length > 0) {
+          await fetch(BASE + "/tareas/" + (tarea._id || tarea.id), {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: "Bearer " + token,
+            },
+            body: JSON.stringify(camposSinResp),
+          });
+        }
+
+        // Asignar responsables via endpoint dedicado si vienen en los cambios
+        if (respIds !== undefined) {
+          // Resolver nombres a IDs si vienen como strings de nombre
+          const idsResueltos = Array.isArray(respIds)
+            ? respIds
+                .map((r) => {
+                  if (r.length === 36 || r.length === 24) return r; // ya es ID
+                  const m = ctxMiembros.find((m) =>
+                    (m.nombre || m.name || m.username || "")
+                      .toLowerCase()
+                      .includes(r.toLowerCase()),
+                  );
+                  return m ? m._id || m.id : r;
+                })
+                .filter(Boolean)
+            : [];
+          await fetch(
+            BASE + "/tareas/" + (tarea._id || tarea.id) + "/responsables",
+            {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + token,
+              },
+              body: JSON.stringify({ responsables: idsResueltos }),
+            },
+          );
+        }
+
         await cargarContexto();
         const resumen = Object.entries(cambiosMapeados)
           .map(([k, v]) => `${k} → ${v}`)

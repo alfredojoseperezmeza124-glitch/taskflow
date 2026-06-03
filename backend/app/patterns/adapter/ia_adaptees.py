@@ -1,6 +1,6 @@
 from app.patterns.adapter.iai_adapter import IAIAdapter
 from app.patterns.adapter.apis_externas import AnthropicAPI, OpenAIAPI
-from app.patterns.adapter.apis_externas import GeminiAPI
+from app.patterns.adapter.apis_externas import GeminiAPI, GroqAPI
 
 
 class AnthropicAdaptee(IAIAdapter):
@@ -22,3 +22,10 @@ class GeminiAdaptee(IAIAdapter):
         import os
         key = os.environ.get("GEMINI_API_KEY")
         return GeminiAPI.send_messages(payload, key)
+
+
+class GroqAdaptee(IAIAdapter):
+    def generar(self, payload: dict) -> dict:
+        import os
+        key = os.environ.get("GROQ_API_KEY")
+        return GroqAPI.send_messages(payload, key)
