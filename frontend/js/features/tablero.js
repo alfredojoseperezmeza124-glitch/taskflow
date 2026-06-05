@@ -244,14 +244,14 @@ function colColor(nombre) {
   return "var(--cyan)";
 }
 
-/* ── TARJETA KANBAN (con botón de subtareas) ── */
+/* ── TARJETA KANBAN ── */
 function tarjeta(t) {
   const resps = (t.responsables || [])
-    .slice(0, 3)
+    .slice(0, 4)
     .map((id) => {
       const m = _resolverUsuario(id);
       const nombre = m?.nombre || m?.name || null;
-      return `<div class="avatar avatar-sm" title="${nombre || id}">${inic(nombre || id.slice(0, 2).toUpperCase())}</div>`;
+      return `<div class="avatar avatar-sm" title="${_escTablero(nombre || id)}">${inic(nombre || id.slice(0, 2).toUpperCase())}</div>`;
     })
     .join("");
 
@@ -262,30 +262,52 @@ function tarjeta(t) {
     t.etapaId,
   );
 
-  return `<div class="k-card group relative rounded-xl border border-white/[0.07] bg-gradient-to-b from-[var(--s2)] to-[var(--s2)] hover:border-brand/30 hover:shadow-[0_4px_20px_rgba(108,99,255,0.12)] hover:-translate-y-0.5 transition-all duration-200 cursor-grab active:cursor-grabbing overflow-hidden"
-    draggable="true" data-tarea-id="${t.id}" data-col-id="${t.columnaId}">
-    <div class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-brand/60 to-brand-light/30 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-    <div class="k-card-tags flex flex-wrap gap-1 p-2.5 pb-0">
-      <div class="prio ${colPrio(t.prioridad)}"></div>
-      ${badgeTipo(t.tipo)}
-      ${fase ? `<span class="badge ba text-[9px] font-medium" title="Fase">${_escTablero(fase.nombre)}</span>` : ""}
-      ${etapa ? `<span class="badge bi text-[9px] font-medium" title="Etapa">${_escTablero(etapa.nombre)}</span>` : ""}
-      ${t.estaVencida ? '<span class="badge br text-[9px] font-semibold animate-pulse">⚠ Vencida</span>' : ""}
-      ${nSubtareas > 0 ? `<span class="badge bm text-[9px]" title="Subtareas"><i class="ph ph-tree-structure" style="font-size:9px"></i> ${nSubtareas}</span>` : ""}
+  const safe = t.titulo.replace(/'/g, "\\'");
+  const prio = (t.prioridad || "BAJA").toLowerCase();
+
+  const vence = t.fechaVencimiento
+    ? new Date(t.fechaVencimiento).toLocaleDateString("es", { day: "numeric", month: "short" })
+    : null;
+
+  const contextoBadges = [
+    fase  ? `<span class="k-ctx-badge k-ctx-fase"  title="Fase">${_escTablero(fase.nombre)}</span>`  : "",
+    etapa ? `<span class="k-ctx-badge k-ctx-etapa" title="Etapa">${_escTablero(etapa.nombre)}</span>` : "",
+  ].filter(Boolean).join("");
+
+  return `<div class="k-card k-prio-${prio}" draggable="true" data-tarea-id="${t.id}" data-col-id="${t.columnaId}">
+
+    <!-- Cabecera: tipo + contexto + chips -->
+    <div class="k-card-head">
+      <div class="k-card-head-left">
+        ${badgeTipo(t.tipo)}
+        ${contextoBadges}
+      </div>
+      <div class="k-card-head-right">
+        ${t.estaVencida ? '<span class="k-chip-vencida" title="Vencida"><i class="fi fi-rr-clock-three"></i></span>' : ""}
+        ${nSubtareas > 0 ? `<span class="k-chip-sub" title="${nSubtareas} subtarea${nSubtareas > 1 ? "s" : ""}"><i class="fi fi-rr-network"></i> ${nSubtareas}</span>` : ""}
+        <span class="k-card-id">#${t.id.slice(-6)}</span>
+      </div>
     </div>
-    <div class="k-card-title px-2.5 py-2 text-sm font-medium text-[var(--t1)] leading-snug">${t.titulo}</div>
-    <div class="k-card-meta flex items-center justify-between px-2.5 pb-2.5 gap-2">
-      <span class="k-card-id text-[10px] font-mono text-[var(--t3)] bg-white/[0.04] rounded px-1.5 py-0.5">#${t.id.slice(-6)}</span>
-      <div class="flex items-center gap-0.5">
-        <div class="avatar-group">${resps}</div>
-        <button class="btn btn-ghost btn-xs rounded-lg hover:bg-brand/15 hover:text-brand-light transition-colors" onclick="abrirPanelSubtareas('${t.id}','${t.titulo.replace(/'/g, "\\'")}')" title="Subtareas">
-          <i class="ph ph-tree-structure"></i>
-        </button>
-        <button class="btn btn-ghost btn-xs rounded-lg hover:bg-white/[0.08] transition-colors" onclick="abrirPanelComentarios('${t.id}','${t.titulo.replace(/'/g, "\\'")}')"><i class="ph ph-chat-circle-text"></i></button>
-        <button class="btn btn-ghost btn-xs rounded-lg hover:bg-white/[0.08] transition-colors" onclick="abrirEditarTarea('${t.id}')" title="Editar"><i class="ph ph-pencil-simple"></i></button>
-        <button class="btn btn-ghost btn-xs rounded-lg hover:bg-white/[0.08] transition-colors" onclick="abrirAsignar('${t.id}')" title="Asignar"><i class="ph ph-user-plus"></i></button>
-        <button class="btn btn-ghost btn-xs rounded-lg hover:bg-white/[0.08] transition-colors" onclick="clonarTarea('${t.id}')" title="Clonar"><i class="ph ph-copy"></i></button>
-        <button class="btn btn-red btn-xs rounded-lg hover:bg-danger/20 transition-colors" onclick="eliminarTarea('${t.id}')" title="Eliminar"><i class="ph ph-trash"></i></button>
+
+    <!-- Título -->
+    <div class="k-card-title" onclick="event.stopPropagation(); abrirDetalleTarea('${t.id}')">${_escTablero(t.titulo)}</div>
+
+    ${vence ? `<div class="k-card-due ${t.estaVencida ? "k-due-warn" : ""}"><i class="fi fi-rr-calendar"></i> ${vence}</div>` : ""}
+
+    <!-- Footer: avatars + prioridad + acciones -->
+    <div class="k-card-footer">
+      <div class="k-card-footer-l">
+        ${resps
+          ? `<div class="avatar-group">${resps}</div>`
+          : `<span class="k-no-assign" title="Sin asignar"><i class="fi fi-rr-user-slash"></i></span>`}
+        <span class="k-prio-chip k-prio-chip-${prio}">${t.prioridad}</span>
+      </div>
+      <div class="k-card-actions">
+        <button class="k-act-btn" onclick="abrirPanelSubtareas('${t.id}','${safe}'); event.stopPropagation()" title="Subtareas"><i class="fi fi-rr-network"></i></button>
+        <button class="k-act-btn" onclick="abrirPanelComentarios('${t.id}','${safe}'); event.stopPropagation()" title="Comentarios"><i class="fi fi-rr-comment"></i></button>
+        <button class="k-act-btn" onclick="abrirEditarTarea('${t.id}'); event.stopPropagation()" title="Editar"><i class="fi fi-rr-pencil"></i></button>
+        <button class="k-act-btn" onclick="abrirAsignar('${t.id}'); event.stopPropagation()" title="Asignar"><i class="fi fi-rr-user-add"></i></button>
+        <button class="k-act-btn k-act-del" onclick="eliminarTarea('${t.id}'); event.stopPropagation()" title="Eliminar"><i class="fi fi-rr-trash"></i></button>
       </div>
     </div>
   </div>`;

@@ -73,7 +73,7 @@ window.cargarTareasPaginadas = async function (proyId, pagina) {
         const nSub = (t.subtareas || []).length;
 
         return `<tr>
-        <td style="font-weight:500;cursor:pointer" onclick="abrirPanelComentarios('${t.id}','${t.titulo.replace(/'/g, "\\'")}')">
+        <td style="font-weight:500;cursor:pointer" onclick="abrirDetalleTarea('${t.id}')">
           ${t.titulo}
           ${nSub > 0 ? `<span class="badge bm" style="margin-left:4px"><i class="ph ph-tree-structure" style="font-size:9px"></i> ${nSub}</span>` : ""}
         </td>
@@ -86,10 +86,10 @@ window.cargarTareasPaginadas = async function (proyId, pagina) {
             <button class="btn btn-outline btn-xs" style="color:var(--a2)"
               onclick="abrirPanelSubtareas('${t.id}','${t.titulo.replace(/'/g, "\\'")}')"
               title="Subtareas (Builder)">
-              <i class="ph ph-tree-structure"></i>
+              <i class="fi fi-rr-tree"></i>
             </button>
             <button class="btn btn-outline btn-xs" onclick="abrirPanelComentarios('${t.id}','${t.titulo.replace(/'/g, "\\'")}')">
-              💬
+              <i class="fi fi-rr-chat"></i>
             </button>
             <button class="btn btn-outline btn-xs" onclick="abrirAsignar('${t.id}')">Asignar</button>
             <button class="btn btn-outline btn-xs" onclick="clonarTarea('${t.id}')">Clonar</button>
@@ -209,3 +209,65 @@ document.addEventListener("taskflow:ready", () => {
     observer.observe(slot, { childList: true, subtree: true });
   }
 });
+
+/* ── PANEL DETALLE TAREA ── */
+async function abrirDetalleTarea(tareaId) {
+  if (!tareaId) return;
+  let modal = document.getElementById("mDetalleTarea");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.className = "overlay";
+    modal.id = "mDetalleTarea";
+    modal.innerHTML = `
+      <div class="modal" style="width:600px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column">
+        <div class="flex-between" style="margin-bottom:12px">
+          <div class="modal-t" id="dtTitulo">Tarea</div>
+          <button class="btn btn-ghost btn-xs" onclick="cerrarModal('mDetalleTarea')">✕</button>
+        </div>
+        <div style="overflow:auto;flex:1;padding-right:8px" id="dtContenido">Cargando...</div>
+        <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
+          <button class="btn btn-outline" onclick="abrirAsignar('${tareaId}')">Asignar</button>
+          <button class="btn btn-primary" onclick="(function(){document.getElementById('mDetalleTarea')?.classList.remove('open'); document.getElementById('mEditarTarea')?.classList.add('open'); document.getElementById('edTareaId').value='${tareaId}'; /* caller should load editar */})();">Editar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) cerrarModal("mDetalleTarea");
+    });
+  }
+
+  abrirModal("mDetalleTarea");
+  const cont = document.getElementById("dtContenido");
+  const titulo = document.getElementById("dtTitulo");
+  if (cont) cont.innerHTML = '<div class="spinner"></div>';
+  try {
+    const t = await api("GET", `/tareas/${tareaId}`);
+    if (titulo) titulo.textContent = t.titulo || 'Tarea';
+    const responsables = (t.responsables || [])
+      .map((id) => {
+        const m = (typeof _resolverUsuario === "function") ? _resolverUsuario(id) : miembrosActuales.find((m) => m.id === id);
+        return `<div class="avatar avatar-sm" title="${m?.nombre||id}">${inic(m?.nombre||id)}</div>`;
+      })
+      .join("");
+    const html = `
+      <div style="display:grid;grid-template-columns:1fr 180px;gap:12px">
+        <div>
+          <div style="font-weight:700;font-size:16px;margin-bottom:8px">${_escTxt(t.titulo||'')}</div>
+          <div class="txt3" style="margin-bottom:12px">${_escTxt(t.descripcion||t.descripcionCorta||'Sin descripción')}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${_htmlContextoTarea(t)}</div>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:8px"><strong class="txt3">Vence:</strong> <span style="margin-left:6px">${t.fechaVencimiento? new Date(t.fechaVencimiento).toLocaleString() : '—'}</span></div>
+        </div>
+        <div style="border-left:1px solid var(--b1);padding-left:12px">
+          <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Responsables</div>
+          <div class="avatar-group">${responsables || '<span class="txt3">—</span>'}</div>
+          <div style="margin-top:12px;font-size:12px;color:var(--t3)">Prioridad</div>
+          <div style="margin-top:6px">${badgePrio(t.prioridad)}</div>
+          <div style="margin-top:12px;font-size:12px;color:var(--t3)">Tipo</div>
+          <div style="margin-top:6px">${badgeTipo(t.tipo)}</div>
+        </div>
+      </div>`;
+    if (cont) cont.innerHTML = html;
+  } catch (e) {
+    if (cont) cont.innerHTML = `<div class="vacío">Error: ${e.message}</div>`;
+  }
+}

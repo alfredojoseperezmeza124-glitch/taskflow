@@ -438,8 +438,8 @@ const PAGINAS_HTML = {
     <div class="card">
       <div class="tabla-wrap">
         <table>
-          <thead><tr><th>Título</th><th>Tipo</th><th>Prioridad</th><th>Contexto</th><th>Responsables</th><th>Estado</th><th>Acciones</th></tr></thead>
-          <tbody id="tbTareas"><tr><td colspan="7" class="vacío">Selecciona un proyecto para ver las tareas</td></tr></tbody>
+          <thead><tr><th>Tarea</th><th>Responsables</th><th>Estado</th><th></th></tr></thead>
+          <tbody id="tbTareas"><tr><td colspan="4" class="vacío">Selecciona un proyecto para ver las tareas</td></tr></tbody>
         </table>
       </div>
       <div id="pagTareas"></div>

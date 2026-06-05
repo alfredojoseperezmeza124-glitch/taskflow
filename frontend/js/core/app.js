@@ -171,6 +171,38 @@ function _restaurarEstadoSidebar() {
   _aplicarSidebarColapsado(guardado);
 }
 
+// Escuchar cambios de tamaño para restaurar comportamiento responsive
+let _resizeTimer = null;
+window.addEventListener("resize", () => {
+  if (_resizeTimer) clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => {
+    _restaurarEstadoSidebar();
+  }, 160);
+});
+
+// Reemplazar iconos Phosphor (`ph ph-...`) por Flaticon Uicons (`fi fi-rr-...`) en el DOM
+function _replacePhWithFlaticon() {
+  if (window._phReplaced) return;
+  window._phReplaced = true;
+  document.querySelectorAll(".ph").forEach((el) => {
+    // reemplazar clase 'ph' por 'fi'
+    el.classList.remove("ph");
+    el.classList.add("fi");
+    // reemplazar clases que empiezan con 'ph-'
+    Array.from(el.classList).forEach((cls) => {
+      if (cls.startsWith("ph-")) {
+        const name = cls.slice(3);
+        el.classList.remove(cls);
+        // prefer 'fi-rr-' style
+        el.classList.add(`fi-rr-${name}`);
+      }
+    });
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => _replacePhWithFlaticon());
+document.addEventListener("taskflow:ready", () => _replacePhWithFlaticon());
+
 /* ── TABLAS EN TARJETAS ── */
 function _aplicarTablasComoTarjetas() {
   document.querySelectorAll(".tabla-wrap table").forEach((tabla) => {
