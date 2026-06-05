@@ -2,105 +2,97 @@
 const PAGINAS_HTML = {
   login: `<div class="login-overlay" id="loginOverlay">
 
-  <!-- Fondo con gradiente y elementos decorativos estilo NomiWise -->
   <div class="login-bg">
-    <div class="login-bg-orb login-bg-orb1"></div>
-    <div class="login-bg-orb login-bg-orb2"></div>
-    <div class="login-bg-orb login-bg-orb3"></div>
-    <div class="login-bg-grid"></div>
+    <div class="login-bg-mesh"></div>
+    <div class="login-bg-glow login-bg-glow1"></div>
+    <div class="login-bg-glow login-bg-glow2"></div>
   </div>
 
-  <!-- Contenedor principal horizontal -->
   <div class="login-card">
 
-    <!-- Panel izquierdo — branding + ilustración -->
+    <!-- Panel izquierdo -->
     <div class="login-left">
-      <div class="login-logo-row">
-        <div class="login-logo-icon">
-          <i class="ph ph-kanban"></i>
-        </div>
-        <span class="login-logo-text">TaskFlow</span>
+      <div class="login-brand">
+        <div class="login-brand-mark">TF</div>
+        <span class="login-brand-name">TaskFlow</span>
+        <span class="login-brand-version">v2026</span>
       </div>
 
-      <div class="login-hero">
-        <div class="login-hero-title">Gestión ágil para<br>equipos que <span class="login-hero-accent">entregan</span></div>
-        <div class="login-hero-desc">Organiza proyectos, asigna tareas y mantén el control con tableros Kanban en tiempo real.</div>
+      <div class="login-headline">
+        <div class="login-headline-eyebrow"><i class="fi fi-rr-sparkles"></i> Plataforma de gestión</div>
+        <h1 class="login-headline-title">Proyectos que<br>se <em>entregan</em>.</h1>
+        <p class="login-headline-sub">Tableros Kanban, jerarquías de proyectos, reportes analíticos y notificaciones en tiempo real.</p>
       </div>
 
-      <!-- Stats decorativas -->
-      <div class="login-stats">
-        <div class="login-stat">
-          <div class="login-stat-num" id="loginPatronesCount">—</div>
-          <div class="login-stat-label">Tecnologías</div>
+      <!-- Mini mockup Kanban -->
+      <div class="login-mockup" aria-hidden="true">
+        <div class="lm-col">
+          <div class="lm-col-hd"></div>
+          <div class="lm-card" style="--lc:#6c63ff"></div>
+          <div class="lm-card" style="--lc:#6c63ff;width:75%"></div>
+          <div class="lm-card" style="--lc:#60a5fa;width:85%"></div>
         </div>
-        <div class="login-stat-sep"></div>
-        <div class="login-stat">
-          <div class="login-stat-num">3</div>
-          <div class="login-stat-label">Roles de usuario</div>
+        <div class="lm-col">
+          <div class="lm-col-hd lm-hd-amber"></div>
+          <div class="lm-card lm-active" style="--lc:#fbbf24"></div>
+          <div class="lm-card" style="--lc:#fbbf24;width:70%"></div>
         </div>
-        <div class="login-stat-sep"></div>
-        <div class="login-stat">
-          <div class="login-stat-num">∞</div>
-          <div class="login-stat-label">Proyectos</div>
+        <div class="lm-col">
+          <div class="lm-col-hd lm-hd-green"></div>
+          <div class="lm-card" style="--lc:#34d399;opacity:.5"></div>
+          <div class="lm-card" style="--lc:#34d399;opacity:.4;width:80%"></div>
+          <div class="lm-card" style="--lc:#34d399;opacity:.35"></div>
         </div>
       </div>
 
-      <!-- Pills de features -->
-      <div class="login-pills">
-        <div class="login-pill"><i class="ph ph-kanban"></i> Kanban</div>
-        <div class="login-pill"><i class="ph ph-users"></i> Equipos</div>
-        <div class="login-pill"><i class="ph ph-chart-bar"></i> Reportes</div>
-        <div class="login-pill"><i class="ph ph-bell"></i> Notificaciones</div>
-        <div class="login-pill"><i class="ph ph-list-checks"></i> Subtareas</div>
-      </div>
+      <!-- Features -->
+      <ul class="login-features">
+        <li><i class="fi fi-rr-dashboard"></i> Tablero Kanban con drag &amp; drop</li>
+        <li><i class="fi fi-rr-users"></i> Gestión de equipos y roles</li>
+        <li><i class="fi fi-rr-stats"></i> Reportes y métricas en tiempo real</li>
+        <li><i class="fi fi-rr-puzzle-piece"></i> 15+ Patrones de diseño aplicados</li>
+      </ul>
+
+      <div class="login-left-footer">TaskFlow &nbsp;·&nbsp; 2026</div>
     </div>
 
     <!-- Panel derecho — formulario -->
     <div class="login-right">
-      <div class="login-form-header">
-        <div class="login-form-title">Iniciar sesión</div>
-        <div class="login-form-sub">Ingresa tus credenciales para continuar</div>
-      </div>
+      <div class="login-form-inner">
 
-      <div class="login-fields">
-        <div class="fg">
-          <label class="flabel">Correo electrónico</label>
-          <div class="login-input-wrap">
-            <i class="ph ph-envelope login-input-ico"></i>
-            <input class="finput login-finput" id="lEmail" type="email"
-              placeholder="correo@empresa.com" autocomplete="email">
+        <div class="login-form-header">
+          <div class="login-form-title">Bienvenido</div>
+          <div class="login-form-sub">Inicia sesión en tu espacio de trabajo</div>
+        </div>
+
+        <div class="login-fields">
+          <div class="fg">
+            <label class="flabel">Correo electrónico</label>
+            <div class="login-input-wrap">
+              <i class="fi fi-rr-envelope login-input-ico"></i>
+              <input class="finput login-finput" id="lEmail" type="email"
+                placeholder="correo@empresa.com" autocomplete="email">
+            </div>
           </div>
-        </div>
 
-        <div class="fg">
-          <label class="flabel">Contraseña</label>
-          <div class="login-input-wrap">
-            <i class="ph ph-lock login-input-ico"></i>
-            <input class="finput login-finput login-finput-pass" id="lPass" type="password"
-              placeholder="••••••••" autocomplete="current-password">
-            <button onclick="toggleVerPass()" tabindex="-1" id="btnVerPass" class="login-eye-btn">
-              <i class="ph ph-eye" id="iconoVerPass"></i>
-            </button>
+          <div class="fg">
+            <label class="flabel">Contraseña</label>
+            <div class="login-input-wrap">
+              <i class="fi fi-rr-lock login-input-ico"></i>
+              <input class="finput login-finput login-finput-pass" id="lPass" type="password"
+                placeholder="••••••••" autocomplete="current-password">
+              <button onclick="toggleVerPass()" tabindex="-1" id="btnVerPass" class="login-eye-btn">
+                <i class="fi fi-rr-eye" id="iconoVerPass"></i>
+              </button>
+            </div>
+            <div class="ferror" id="lError"></div>
           </div>
-          <div class="ferror" id="lError"></div>
+
+          <button class="btn btn-primary btn-w login-btn" id="btnLogin" onclick="iniciarSesion()">
+            <i class="fi fi-rr-sign-in-alt"></i> Iniciar sesión
+          </button>
         </div>
 
-        <button class="btn btn-primary btn-w login-btn" id="btnLogin" onclick="iniciarSesion()">
-          <i class="ph ph-sign-in"></i> Iniciar sesión
-        </button>
-      </div>
-
-      <div class="login-roles">
-        <div class="login-roles-label">Roles del sistema</div>
-        <div class="login-roles-badges">
-          <span class="login-role-badge login-role-admin"><i class="ph ph-shield-check"></i> Admin</span>
-          <span class="login-role-badge login-role-pm"><i class="ph ph-briefcase"></i> Project Manager</span>
-          <span class="login-role-badge login-role-dev"><i class="ph ph-code"></i> Developer</span>
-        </div>
-      </div>
-
-      <div class="login-footer">
-        Universidad Popular del Cesar · TaskFlow 2026
       </div>
     </div>
 
